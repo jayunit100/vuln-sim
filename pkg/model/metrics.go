@@ -4,10 +4,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var vulnsDetected prometheus.Gauge
+var VulnsDetected prometheus.Gauge
 
 func init() {
-	vulnsDetected = prometheus.NewGauge(prometheus.GaugeOpts{
+	VulnsDetected = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "vuln-sm",
 		Subsystem: "vulns",
 		Name:      "vulns_detected",

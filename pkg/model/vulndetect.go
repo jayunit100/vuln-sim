@@ -18,4 +18,5 @@ type VulnDetect struct {
 func (v *VulnDetect) Scan(i *Image) {
 	u.AdvanceClock(2 * time.Minute)
 	v.Vulns[i.Sha] = i.vulns
+	VulnsDetected.Inc()
 }
