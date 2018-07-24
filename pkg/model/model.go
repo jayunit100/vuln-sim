@@ -19,20 +19,31 @@ type Datacenter struct {
 	deletionRate time.Duration
 }
 
+var nsMutate *sync.Mutex
+
+func init() {
+	nsMutate = &sync.Mutex{}
+}
+
 // VulnerableImagesBySha returns all vulnerable images in the datacenter, in actuality.
 func (d *Datacenter) VulnerableImagesBySha() []string {
+	nsMutate.Lock()
+
 	images := []string{}
 	for _, n := range d.namespaces {
 		for _, c := range n.containers {
 			if c.image.vulns > 0 {
-				images = append(images, c.image.Sha)
+				images = append(images, c.image.Sha())
 			}
 		}
 	}
+	nsMutate.Unlock()
+
 	return images
 }
 
 func (d *Datacenter) newApp() {
+	nsMutate.Lock()
 	ns := &Namespace{
 		ns: fmt.Sprintf("ns-%v", strings.ToLower(randomdata.SillyName())),
 	}
@@ -46,13 +57,16 @@ func (d *Datacenter) newApp() {
 	}
 	d.namespaces = append(d.namespaces, ns)
 	fmt.Println(fmt.Sprintf("Created ns %v with %v containers vulns (total) %v", ns.ns, len(ns.containers), ns.TotalVulns()))
-}
-
-func (d *Datacenter) upgradeEvent() {
+	nsMutate.Unlock()
 
 }
 
 func (d *Datacenter) deleteApp() {
+	nsMutate.Lock()
+
+	i := rand.Intn(len(d.namespaces))
+	d.namespaces = append(d.namespaces[:i], d.namespaces[i+1:]...)
+	nsMutate.Unlock()
 
 }
 
@@ -71,16 +85,10 @@ func (d *Datacenter) Simulate(maxNS int, maxContainers int) {
 			do(d.newApp)
 		}()
 
-		// app Destruction
+		// app Destruction. which also serves as bulk container rev'ing.
 		go func() {
 			util.AdvanceClock(d.deletionRate)
 			do(d.deleteApp)
-		}()
-
-		// app Updates
-		go func() {
-			util.AdvanceClock(d.updateRate)
-			do(d.upgradeEvent)
 		}()
 
 		util.AdvanceClock(1 * time.Second)
