@@ -1,12 +1,14 @@
 package model
 
 import (
+	"fmt"
 	"math/rand"
 )
 
 type Container struct {
 	exposed bool
 	image   *Image
+	id      string
 }
 
 func randApp() []*Container {
@@ -24,6 +26,7 @@ func randContainer() *Container {
 		image:   randImage(),
 		exposed: rand.Int()%2 == 0,
 	}
-
+	// TODO FINISH Adding primatry key to conatainer
+	cnj.id = fmt.Sprintf("%v_%v", cnj.image.Name, rand.Intn(100000000))
 	return cnj
 }
