@@ -1,12 +1,9 @@
 package model
 
 import (
-	"net/http"
-
 	"github.com/sirupsen/logrus"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var NamespacesM *prometheus.GaugeVec
@@ -58,8 +55,9 @@ func init() {
 	prometheus.MustRegister(ThreatsM)
 
 	logrus.Infof("starting prometheus http")
-	http.Handle("/metrics", promhttp.Handler())
-	go func() {
-		http.ListenAndServe(":9091", nil)
-	}()
+
+	//http.Handle("/metrics", promhttp.Handler())
+	//go func() {
+	//	http.ListenAndServe(":9091", nil)
+	//}()
 }

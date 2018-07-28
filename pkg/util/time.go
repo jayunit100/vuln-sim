@@ -43,6 +43,13 @@ func TimeStamp() string {
 	return strings.ToLower(theClock.Now().Format("Mon_Jan_2_15_04_05_mst_2006"))
 }
 
+func RandIntFromDistribution(median int, deviation int) int {
+	ni := func(mu float32, sigma float32) float32 {
+		return float32(rand.NormFloat64()*float64(sigma) + float64(mu))
+	}
+	return int(ni(float32(median), float32(deviation)))
+}
+
 // randomly log something, probability = x out of 100 times.
 func RandLog(x int, s string) interface{} {
 	if rand.Intn(100) < x {
