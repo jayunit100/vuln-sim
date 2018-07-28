@@ -27,6 +27,7 @@ var tags []string
 
 // make 20k images to start
 func init() {
+	imagesSeen = make(map[string]string)
 	for i := 0; i < 100; i++ {
 		if i%3 == 0 {
 			vulnsProbabilityArray = append(vulnsProbabilityArray, 1)
@@ -35,13 +36,13 @@ func init() {
 		}
 	}
 	log.Infof("vulns: %v ", vulnsProbabilityArray)
-
 	images = make(map[string]*Image)
 	tags = strings.Split(
 		"asdfweo,df,woeif,oei,oi,wodi,cowdi,cwoid,cwo,cwoei,foe,owe,cwod,cowe,cowei,woe,woe,woei,woei,2oei,dod,codi,cd,c,dc,kfk,df,sdf,e,fe,f3,5h4,g,4rf34,f24,f,5fer,ve,dc,dcw,ec,we,f3r,f3,rf,we,edce,d", ",")
 	for i := 0; i < 10000; i++ {
 		// randomly make a name for this image.
 		img := &Image{}
+		img.contents = fmt.Sprintf("%v", rand.Intn(10000000))
 		img.Name = strings.ToTitle(randomdata.SillyName())
 		img.Tags = []string{}
 		img.Tags = append(img.Tags, fmt.Sprintf("tag-%v", time.Now().Format("Mon Jan 2 12:00:00 2006")))
@@ -73,14 +74,22 @@ func init() {
 	}
 }
 
+// TODO make it a constant.
 func (i *Image) Sha() string {
-	sha := fmt.Sprintf("%v-%v-%v", i.Name, time.Now(), rand.Intn(2000))
+	sha := fmt.Sprintf("%v-%v", i.Name, i.contents)
 	return sha
 }
 
+var imagesSeen map[string]string
+
 // randImage returns a random image from a fixed set of images .
 func randImage() *Image {
-	return images[randStringMapKey(images)]
+	i := randStringMapKey(images)
+	imagesSeen[i] = "..."
+	if len(imagesSeen) == len(images) {
+		panic("all images seen. simulation complete.")
+	}
+	return images[i]
 }
 
 func randStringMapKey(m map[string]*Image) string {

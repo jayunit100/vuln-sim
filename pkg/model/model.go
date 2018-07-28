@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	randomdata "github.com/Pallinder/go-randomdata"
 	log "github.com/sirupsen/logrus"
 
@@ -51,6 +53,7 @@ func (d *Datacenter) VulnerableNamespaces() []string {
 	return vulnNs
 }
 
+// DO NOT CALL, use cache instead...
 func (d *Datacenter) Containers() []*Container {
 	containers := []*Container{}
 	for _, n := range d.namespaces {
@@ -115,8 +118,11 @@ func NewDs() *Datacenter {
 	return d
 }
 
+var vulns map[string]string
+
 // Simulate simulates cluster images that come and go.
 func Simulate(maxNS int, maxContainers int) {
+	vulns = make(map[string]string)
 	d := NewDs()
 	steady := 1000
 	// seed the cluster w/ 1000 namespaces
@@ -126,6 +132,7 @@ func Simulate(maxNS int, maxContainers int) {
 	sims := 0
 	adds := 0
 	deletes := 0
+	scanner := &SecurityScanner{}
 	for {
 		// cluster size varies 10% up or down, by adding up to
 		// 10% * steadystate add or delete operations in chunks.
@@ -146,13 +153,58 @@ func Simulate(maxNS int, maxContainers int) {
 			}
 		}
 		sims++
+		vulnNs := d.VulnerableNamespaces()
+		vulnImg := d.VulnerableImagesBySha()
+
 		fmt.Println("*********************************************************")
 		fmt.Println(fmt.Sprintf("adds:%v deletes:%v total:%v queue:%v", adds, deletes, sims, len(d.operations)))
 		fmt.Println(fmt.Sprintf("namespaces %v", len(d.namespaces)))
 		fmt.Println(fmt.Sprintf("containers total : %v", len(d.Containers())))
-		fmt.Println(fmt.Sprintf("vulnerable images %v", len(d.VulnerableImagesBySha())))
-		fmt.Println(fmt.Sprintf("vulnerable namespaces %v", len(d.VulnerableNamespaces())))
+		fmt.Println(fmt.Sprintf("vulnerable images %v", len(vulnImg)))
+		ImagesM.WithLabelValues("true").Set(float64(len(vulnImg)))
+
+		fmt.Println(fmt.Sprintf("vulnerable namespaces %v", len(vulnNs)))
 		fmt.Println(fmt.Sprintf("time in days so far: %v , simulations: %v", (util.SimulatedTimeSoFar().Hours() / 24), sims))
 		util.AdvanceClock(1 * time.Hour)
+
+		fmt.Println("Starting scan simulation !")
+		// we've got one hour to scan stuff...
+		maxMinutes := 60.0
+		var minutes float64
+		scanned := 0
+		for _, c := range d.Containers() {
+			vuln, t := scanner.scanGetVuln(c.image)
+
+			if c.image.vulns > 0 {
+				ImagesM.WithLabelValues("true").Inc()
+			} else {
+				ImagesM.WithLabelValues("false").Inc()
+			}
+
+			if vuln {
+				ImagesScannedM.WithLabelValues("true").Inc()
+				vulns[c.image.Sha()] = "..."
+			} else {
+				ImagesScannedM.WithLabelValues("false").Inc()
+
+			}
+			scanned++
+			minutes = minutes + t.Minutes()
+			util.AdvanceClock(t)
+			if minutes > maxMinutes {
+				logrus.Infof("breaking! got through %v in one minute. vulns %v", scanned, len(vulns))
+				break
+			}
+		}
+		//logrus.Infof("threats: %v", vulns)
+		for _, c := range d.VulnerableImagesBySha() {
+			if _, ok := vulns[c]; ok {
+				ThreatsM.WithLabelValues("true").Inc()
+			} else {
+				//logrus.Infof("didnt see %v in the vulns array !", c)
+				ThreatsM.WithLabelValues("false").Inc()
+			}
+		}
+		time.Sleep(5 * time.Second)
 	}
 }
