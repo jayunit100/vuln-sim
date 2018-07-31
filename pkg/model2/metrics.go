@@ -10,6 +10,7 @@ import (
 )
 
 var Generic *prometheus.GaugeVec
+var Vulns *prometheus.GaugeVec
 
 func init() {
 
@@ -18,11 +19,17 @@ func init() {
 		Subsystem: "",
 		Name:      "generic",
 		Help:      "generic counters",
-	}, []string{"Days", "Churn", "Adds", "Deletes"})
-
+	}, []string{"Operation"})
+	Vulns = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "vuln",
+		Subsystem: "",
+		Name:      "containers",
+		Help:      "containers vulns",
+	}, []string{"Type"})
 }
 func init() {
 	prometheus.MustRegister(Generic)
+	prometheus.MustRegister(Vulns)
 
 	logrus.Infof("starting prometheus http")
 	http.Handle("/metrics", promhttp.Handler())

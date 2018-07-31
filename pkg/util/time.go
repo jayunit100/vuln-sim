@@ -47,7 +47,8 @@ func RandIntFromDistribution(median int, deviation int) int {
 	ni := func(mu float32, sigma float32) float32 {
 		return float32(rand.NormFloat64()*float64(sigma) + float64(mu))
 	}
-	return int(ni(float32(median), float32(deviation)))
+	f := int(ni(float32(median), float32(deviation)))
+	return f
 }
 
 // randomly log something, probability = x out of 100 times.

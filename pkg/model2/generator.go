@@ -3,9 +3,10 @@ package model2
 import (
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/Pallinder/go-randomdata"
 	"github.com/jayunit100/vuln-sim/pkg/util"
-	"github.com/sirupsen/logrus"
 )
 
 type Img struct {
@@ -15,43 +16,56 @@ type Img struct {
 	K int32
 }
 
-// Low, medium, high vulnerabilities, (image name = key)
-func randImage() *Img {
-	l, m, h, id := func() (bool, bool, bool, int32) {
-		key := int32(util.RandIntFromDistribution(1000*1000, 10000))
-		if key < 1000000+8000 {
+// randImage creates an image with a "SHA" as an integer "key" for simplicity, since
+// this is just for simulations.  When the seed varies, it simulates the addition of new
+// containers to a system, since the range of integers is related to the seed value.
+func randImage(seed int) *Img {
+	// This function computes vulnarbility for an image.
+	// The primary key of the image is an int32.
+	// The values below are calibrated for test outputs.
+
+	// The below values are calibrated for 'reasonable' vuln. stats, east to modify
+	// and then rerun the unit tests and check output.
+	registrySize := 10000 + seed
+	simpleCalib := []int{
+		registrySize,
+		registrySize + registrySize/50,
+		registrySize + registrySize/40,
+	}
+
+	l, m, h, id := func() (bool, bool, bool, int) {
+		key := util.RandIntFromDistribution(registrySize, registrySize/100)
+		if key < simpleCalib[0] {
 			return false, false, false, key
 		}
-		if key < 1000000+11000 {
+		if key < simpleCalib[1] {
 			return true, false, false, key
 		}
-		if key < 1000000+1200 {
-			return true, true, false, key
-		}
-		if key < 1000000+17000 {
+		if key < simpleCalib[2] {
 			return false, false, true, key
 		}
 		return true, true, true, key
 	}()
-	return &Img{l, m, h, id}
+	return &Img{l, m, h, int32(id)}
 }
 
 // randApp returns an app, which is just a map of key->image.
 // app size is normally distributed (0->10)
 func randApp(max_pods int) (string, map[int32]*Img) {
-	pods := util.RandIntFromDistribution(max_pods, max_pods/4)
+	pods := util.RandIntFromDistribution(max_pods, max_pods/2) + 100
 	app := map[int32]*Img{}
 	iter := 0
 	// i.e. 'keep making new unique images until we have 8 of them'
 	for {
-		i := randImage()
-		logrus.Infof("image: %v  / %v", i.K, pods)
+		i := randImage(iter)
+		//logrus.Infof("image: %v  / %v", i.K, pods)
 		app[i.K] = i
 		if len(app) == pods {
 			return strings.ToLower(randomdata.SillyName()), app
 		}
 		iter++
 		if iter > pods+100 {
+			logrus.Fatalf("app pods: %v, desired: %v, iterations: %v... max_pods: %v", len(app), pods, iter, max_pods)
 			panic("something went horribly wrong when getting a random list of pods !")
 		}
 	}

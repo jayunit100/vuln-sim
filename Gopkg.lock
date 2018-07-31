@@ -9,6 +9,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/atgjack/prob"
+  packages = ["."]
+  revision = "6cfd5d401186c4cbb23db12ae7fb4e35aab7d8d1"
+
+[[projects]]
+  branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
@@ -91,6 +97,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "d0179fe6f3c8a989a7bcdd9f9c0518ec00563561901c21a4ee48e6cd92153267"
+  inputs-digest = "fec05d16d248d29a040eada7586f4e69b97e5568ced871e0f5bcd116c6332b83"
   solver-name = "gps-cdcl"
   solver-version = 1
