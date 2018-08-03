@@ -51,6 +51,20 @@ func RandIntFromDistribution(median int, deviation int) int {
 	return f
 }
 
+// TODO make this generic if we can...
+func RandRemove(s []func()) (func(), []func()) {
+	if len(s) == 0 {
+		panic("0 length array !")
+	}
+	if len(s) == 1 {
+		return s[0], []func(){}
+	}
+	i := rand.Intn(len(s))
+	ff := s[i]
+	s[i] = s[len(s)-1]
+	return ff, s[:len(s)-1]
+}
+
 // randomly log something, probability = x out of 100 times.
 func RandLog(x int, s string) interface{} {
 	if rand.Intn(100) < x {
