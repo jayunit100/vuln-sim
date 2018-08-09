@@ -1,11 +1,13 @@
 package model2
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	chart "github.com/wcharczuk/go-chart"
 
 	"github.com/jayunit100/vuln-sim/pkg/util"
 	"github.com/sirupsen/logrus"
@@ -172,8 +174,8 @@ func (c *ClusterSim) RunAllEvents() {
 		e, _c := util.RandRemove(c.events)
 		c.events = _c
 		e()
-		c.VulnerabilityTime()
 		c.UpdateMetrics()
+		c.VulnerabilityTime()
 	}
 }
 
@@ -183,8 +185,7 @@ var st = &ScanTool{}
 // records the values at every time point in the simulation.  This is b/c some metrics may not be
 // scraped, due to simulation velocity.
 func (c *ClusterSim) UpdateMetrics() {
-	Vulns.Reset() // todo... is this necessary?
-
+	VulnsMetric.Reset() // todo... is this necessary?
 	// immediately invoked self executing function !
 	metrics := func() {
 		var h, m, l int
@@ -209,11 +210,13 @@ func (c *ClusterSim) UpdateMetrics() {
 				}
 			}
 		}
-		Vulns.WithLabelValues(fmt.Sprintf("High")).Set(float64(h))
-		Vulns.WithLabelValues(fmt.Sprintf("Med")).Set(float64(m))
-		Vulns.WithLabelValues(fmt.Sprintf("Low")).Set(float64(l))
+		VulnsMetric.WithLabelValues(fmt.Sprintf("High")).Set(float64(h))
+		VulnsMetric.WithLabelValues(fmt.Sprintf("Med")).Set(float64(m))
+		VulnsMetric.WithLabelValues(fmt.Sprintf("Low")).Set(float64(l))
 		if l > 0 || m > 0 || h > 0 {
 			c.Vulns = append(c.Vulns, l+m+h)
+		} else {
+			c.Vulns = append(c.Vulns, 0)
 			logrus.Infof("%v\n", c.Vulns)
 		}
 	}
@@ -226,11 +229,37 @@ func (c *ClusterSim) TimeSoFar() time.Duration {
 	return d
 }
 
+func (c *ClusterSim) Plot() (*bytes.Buffer, []float64, []float64) {
+	dataX := []float64{}
+	dataY := []float64{}
+	for i, v := range c.Vulns {
+		dataX = append(dataX, float64(i))
+		dataY = append(dataY, float64(v))
+	}
+	graph := chart.Chart{
+		Series: []chart.Series{
+			chart.ContinuousSeries{
+				XValues: dataX,
+				YValues: dataY,
+			},
+		},
+	}
+	buffer := bytes.NewBuffer([]byte{})
+	err := graph.Render(chart.PNG, buffer)
+	if err != nil {
+		panic(err)
+	}
+	return buffer, dataX, dataY
+}
+
 func Simulate(c *ClusterSim) {
 	c.Initialize()
 	c.RunAllEvents()
-	logrus.Infof(".. simulated time periods \ndesc:[%v] \ntime:[%v] days,\nvulntime:[%v]",
+	logrus.Infof(".. simulated time periods \ndesc:[%v] \ntime:[%v] days,\nvulntime:[%v] days",
 		c.Describe(),
 		c.TimeSoFar().Hours()/24,
-		c.VulnerabilityTime())
+		c.VulnerabilityTime().Hours()/24)
+
+	_, x, y := c.Plot()
+	logrus.Infof("%v %v", x, y)
 }
