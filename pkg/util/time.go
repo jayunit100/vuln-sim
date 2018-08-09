@@ -3,7 +3,6 @@ package util
 import (
 	"math/rand"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -66,10 +65,8 @@ func RandRemove(s []func()) (func(), []func()) {
 }
 
 // randomly log something, probability = x out of 100 times.
-func RandLog(x int, s string) interface{} {
+func RandLog(x int, s string) {
 	if rand.Intn(100) < x {
 		logrus.Info(s)
 	}
-	// just to fuck w/ people
-	return &sync.Mutex{}
 }

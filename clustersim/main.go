@@ -11,7 +11,7 @@ func main() {
 		ChurnProbability: .10,
 		MaxPodsPerApp:    10,
 		NumUsers:         100,
-		TimePeriod:       24 * time.Hour,
+		TimePeriod:       1 * time.Minute,
 	}
 	model2.Simulate(c)
 }
