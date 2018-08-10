@@ -19,14 +19,13 @@ type Img struct {
 // randImage creates an image with a "SHA" as an integer "key" for simplicity, since
 // this is just for simulations.  When the seed varies, it simulates the addition of new
 // containers to a system, since the range of integers is related to the seed value.
-func randImage(seed int) *Img {
+func randImage(registrySize int) *Img {
 	// This function computes vulnarbility for an image.
 	// The primary key of the image is an int32.
 	// The values below are calibrated for test outputs.
 
 	// The below values are calibrated for 'reasonable' vuln. stats, east to modify
 	// and then rerun the unit tests and check output.
-	registrySize := 10000 + seed
 	simpleCalib := []int{
 		registrySize,
 		registrySize + registrySize/50,
@@ -51,13 +50,13 @@ func randImage(seed int) *Img {
 
 // randApp returns an app, which is just a map of key->image.
 // app size is normally distributed (0->10)
-func randApp(max_pods int) (string, map[int32]*Img) {
+func randApp(max_pods int, regSize int) (string, map[int32]*Img) {
 	pods := util.RandIntFromDistribution(max_pods, max_pods/2) + 100
 	app := map[int32]*Img{}
 	iter := 0
 	// i.e. 'keep making new unique images until we have 8 of them'
 	for {
-		i := randImage(iter)
+		i := randImage(regSize)
 		//logrus.Infof("image: %v  / %v", i.K, pods)
 		app[i.K] = i
 		if len(app) == pods {

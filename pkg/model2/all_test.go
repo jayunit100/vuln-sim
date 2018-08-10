@@ -49,7 +49,7 @@ func TestNewImage(t *testing.T) {
 	any := 0
 	i := 1
 	for {
-		r := randImage(0)
+		r := randImage()
 		if r.L || r.M || r.H {
 			any++
 		}

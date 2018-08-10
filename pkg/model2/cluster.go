@@ -1,13 +1,9 @@
 package model2
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus"
-	chart "github.com/wcharczuk/go-chart"
 
 	"github.com/jayunit100/vuln-sim/pkg/util"
 	"github.com/sirupsen/logrus"
@@ -21,10 +17,12 @@ type ClusterSim struct {
 	// dont need to set these at startup, their handled via initialization.
 	Increments                      int64
 	events                          []func()
-	TimePeriod                      time.Duration
+	IncrementTimePeriod             time.Duration
 	StateApp                        map[string]map[int32]*Img
 	ScanCapacityPerSimulationPeriod int
 	Vulns                           []int
+	RegistrySize                    int
+	st                              *ScanTool
 }
 
 func (c *ClusterSim) Describe() string {
@@ -39,7 +37,14 @@ func (c *ClusterSim) Describe() string {
 		}
 	}
 
-	return fmt.Sprintf("\t %v\n\tcontainers: %v\n\timages %v", sA, i, len(uniq))
+	description := fmt.Sprintf("\t \n\tcontainers: %v\n\timages %v.. simulated time periods \ndesc:[%v] \ntime:[%v] days,\nvulntime:[%v] days",
+		sA,
+		i,
+		len(uniq),
+		c.TimeSoFar().Hours()/24,
+		c.VulnerabilityTime().Hours()/24)
+
+	return description
 }
 
 // VulnerabilityTime returns the total amount of time that you've been vulnerable.
@@ -47,11 +52,11 @@ func (c *ClusterSim) VulnerabilityTime() time.Duration {
 	totalVulnTime := 0 * time.Second
 	for _, v := range c.Vulns {
 		if v > 0 {
-			totalVulnTime = totalVulnTime + c.TimePeriod
+			totalVulnTime = totalVulnTime + c.IncrementTimePeriod
 		}
 	}
-	totalTime := time.Duration(c.Increments) * c.TimePeriod
-	logrus.Infof("vuln time: %v , total time: %v", totalVulnTime, totalTime)
+	totalTime := time.Duration(c.Increments) * c.IncrementTimePeriod
+	logrus.Infof("vuln time: %v , total time: %v  [ %v ] ", totalVulnTime, totalTime, c.Increments)
 	return totalVulnTime
 }
 
@@ -59,9 +64,10 @@ func (c *ClusterSim) Initialize() {
 	m := map[string]map[int32]*Img{}
 	c.StateApp = m
 	c.Increments = 0
+	c.st = &ScanTool{}
 	c.Vulns = []int{}
 
-	if c.TimePeriod == 0 {
+	if c.IncrementTimePeriod == 0 {
 		panic("time period must be non-zero")
 	}
 	if c.ScanCapacityPerSimulationPeriod == 0 {
@@ -72,7 +78,7 @@ func (c *ClusterSim) Initialize() {
 	// now, populate...
 	for {
 		Generic.WithLabelValues("NewAppInit").Inc()
-		app, pods := randApp(c.MaxPodsPerApp) // map[int32]*Img
+		app, pods := randApp(c.MaxPodsPerApp, c.RegistrySize) // map[int32]*Img
 		c.StateApp[app] = pods
 		if len(c.StateApp) == c.NumUsers {
 			break
@@ -98,7 +104,7 @@ func (c *ClusterSim) initEvents(totalActions int) []func() {
 					if rand.Intn(10) < 5 {
 						deletes = append(deletes, app)
 					} else {
-						newApp, newPods := randApp(c.MaxPodsPerApp)
+						newApp, newPods := randApp(c.MaxPodsPerApp, c.RegistrySize)
 						adds[newApp] = newPods
 					}
 				}
@@ -108,6 +114,9 @@ func (c *ClusterSim) initEvents(totalActions int) []func() {
 		// Decide how many scan events we need to simulate.
 		scans := c.ScanCapacityPerSimulationPeriod
 
+		d := 0
+		a := 0
+		s := 0
 		// (2) now, do all the map mutation actions to an event q.
 		for _, app := range deletes {
 			Generic.WithLabelValues("Deletes").Inc()
@@ -123,15 +132,16 @@ func (c *ClusterSim) initEvents(totalActions int) []func() {
 		}
 		for i := 0; i < scans; i++ {
 			c.events = append(c.events, func() {
-				st.ScanNewImage()
+				c.st.ScanNewImage()
 			})
 		}
 
-		if len(c.events)%100 == 0 {
+		if len(c.events)%2 == 0 {
 			logrus.Infof("events created so far: %v", len(c.events))
 		}
 
 		if len(c.events) >= totalActions {
+			logrus.Infof("--- events created --- %v ( %v %v %v )", len(c.events), d, a, s)
 			return c.events
 		}
 	}
@@ -157,15 +167,6 @@ func (c *ClusterSim) ExportSimulationCheckpointStatistics() {
 }
 
 func (c *ClusterSim) RunAllEvents() {
-
-	highVulns := make(chan prometheus.Metric)
-	go func() {
-		for {
-			v := <-highVulns
-			logrus.Infof("change to vulns %v", v.Desc().String)
-		}
-	}()
-
 	for len(c.events) > 0 {
 		c.Increments++
 		if c.Increments < 0 {
@@ -176,10 +177,10 @@ func (c *ClusterSim) RunAllEvents() {
 		e()
 		c.UpdateMetrics()
 		c.VulnerabilityTime()
+		logrus.Infof("remaining events: %v", len(c.events))
 	}
+	logrus.Infof("done !")
 }
-
-var st = &ScanTool{}
 
 // UpdateMetrics updates prometheus metrics.  Note that it also updates the total vulns, which
 // records the values at every time point in the simulation.  This is b/c some metrics may not be
@@ -193,8 +194,8 @@ func (c *ClusterSim) UpdateMetrics() {
 		for _, images := range c.StateApp {
 			for _, img := range images {
 				// if unscanned... queue it.
-				if _, ok := st.Scanned[img.K]; !ok {
-					st.Enqueue(img)
+				if _, ok := c.st.Scanned[img.K]; !ok {
+					c.st.Enqueue(img)
 					// if not scanned, increment its vulns...
 					if !ok {
 						if img.H {
@@ -217,49 +218,34 @@ func (c *ClusterSim) UpdateMetrics() {
 			c.Vulns = append(c.Vulns, l+m+h)
 		} else {
 			c.Vulns = append(c.Vulns, 0)
-			logrus.Infof("%v\n", c.Vulns)
+			//logrus.Infof("%v\n", c.Vulns)
 		}
 	}
 	metrics()
 }
 
 func (c *ClusterSim) TimeSoFar() time.Duration {
-	d := c.TimePeriod * time.Duration(c.Increments)
+	d := c.IncrementTimePeriod * time.Duration(c.Increments)
 	logrus.Infof("time soo far %v ", d)
 	return d
 }
 
-func (c *ClusterSim) Plot() (*bytes.Buffer, []float64, []float64) {
+func (c *ClusterSim) Plot() ([]float64, []float64) {
 	dataX := []float64{}
 	dataY := []float64{}
 	for i, v := range c.Vulns {
 		dataX = append(dataX, float64(i))
 		dataY = append(dataY, float64(v))
 	}
-	graph := chart.Chart{
-		Series: []chart.Series{
-			chart.ContinuousSeries{
-				XValues: dataX,
-				YValues: dataY,
-			},
-		},
-	}
-	buffer := bytes.NewBuffer([]byte{})
-	err := graph.Render(chart.PNG, buffer)
-	if err != nil {
-		panic(err)
-	}
-	return buffer, dataX, dataY
+
+	return dataX, dataY
 }
 
-func Simulate(c *ClusterSim) {
+func (c *ClusterSim) Simulate() {
 	c.Initialize()
 	c.RunAllEvents()
-	logrus.Infof(".. simulated time periods \ndesc:[%v] \ntime:[%v] days,\nvulntime:[%v] days",
-		c.Describe(),
-		c.TimeSoFar().Hours()/24,
-		c.VulnerabilityTime().Hours()/24)
+	logrus.Infof(c.Describe())
 
-	_, x, y := c.Plot()
+	x, y := c.Plot()
 	logrus.Infof("%v %v", x, y)
 }
