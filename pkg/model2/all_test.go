@@ -14,7 +14,7 @@ func TestNewApp(t *testing.T) {
 	containersCreated := 0
 
 	for {
-		_, pods := randApp(10)
+		_, pods := randApp()
 		appsCreated++
 
 		for _, v := range pods {
@@ -49,7 +49,7 @@ func TestNewImage(t *testing.T) {
 	any := 0
 	i := 1
 	for {
-		r := randImage()
+		r := randImage(10000)
 		if r.L || r.M || r.H {
 			any++
 		}

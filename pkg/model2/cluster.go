@@ -83,7 +83,7 @@ func (c *ClusterSim) Initialize() {
 		if len(c.StateApp) == c.NumUsers {
 			break
 		}
-	}
+=	}
 	c.events = c.initEvents(1000)
 
 }
