@@ -5,26 +5,16 @@ import (
 	"math/rand"
 
 	randomdata "github.com/Pallinder/go-randomdata"
-	"github.com/jayunit100/vuln-sim/pkg/util"
-	"github.com/sirupsen/logrus"
 )
 
 type Registry struct {
-	Images map[string]*Image
+	Images        map[string]*Image
+	ImagesByIndex []*Image
 }
 
-func NewImage(baseName string, tag []string) *Image {
-	logrus.Infof("%v %v %v", util.RandIntFromDistribution(5, 10), util.RandIntFromDistribution(5, 10), util.RandIntFromDistribution(5, 10))
-
-	img := &Image{
-		SHA:          fmt.Sprintf("%v-%v", rand.Float32(), randomdata.PostalCode("")),
-		Name:         baseName,
-		Tags:         tag,
-		HasLowVulns:  util.RandIntFromDistribution(10, 5) < 9,
-		HasMedVulns:  util.RandIntFromDistribution(10, 5) < 8,
-		HasHighVulns: util.RandIntFromDistribution(10, 5) < 7,
-	}
-	return img
+func (c *Registry) RandImageFrom() *Image {
+	index := rand.Intn(len(c.Images))
+	return c.ImagesByIndex[index]
 }
 
 func NewRegistry(maxBaseNames int, maxImages int) *Registry {
@@ -54,5 +44,13 @@ func NewRegistry(maxBaseNames int, maxImages int) *Registry {
 			}
 		}
 	}
+	r.ImagesByIndex = []*Image{}
+	// build random image index...
+	i := 0
+	for _, img := range r.Images {
+		r.ImagesByIndex = append(r.ImagesByIndex, img)
+		i++
+	}
+
 	return r
 }
