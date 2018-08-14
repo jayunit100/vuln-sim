@@ -13,11 +13,13 @@ func TestCompareSmallAndLargeSimulations(t *testing.T) {
 	//	- the smaller simulation should have less vulnerabilities at the beggining.
 	//	- add more later, this test is again, only for codifying that 'trends' which
 	//	  approximate the real world actually occur.
-	c := Assert(.5, 10, 100, 10, 10)
+
+	regSize := 100 // higher reg size: longer convergence factor.
+	c := Assert(.5, 10, regSize, 10, 10)
 	_, smallUsersVulns := c.Plot()
 	logrus.Infof("%v", c.VulnerabilityTime())
 
-	d := Assert(.5, 100, 100, 100, 10)
+	d := Assert(.5, 100, regSize, 100, 10)
 	_, bigUsersVulns := d.Plot()
 	logrus.Infof("%v vs %v", c.VulnerabilityTime(), d.VulnerabilityTime())
 	logrus.Infof("%v %v", len(smallUsersVulns), len(bigUsersVulns))
@@ -38,8 +40,9 @@ func TestCompareSmallAndLargeSimulations(t *testing.T) {
 			if ii >= simulationLen {
 				continue
 			}
-			logrus.Infof("%v: %v %v diff=(%v %v)", ii, smallUsersVulns[ii], bigUsersVulns[ii], lastVulnS-smallUsersVulns[ii], lastVulnB-bigUsersVulns[ii])
-
+			if ii%10 == 0 {
+				logrus.Infof("%v: %v %v diff=(%v %v)", ii, smallUsersVulns[ii], bigUsersVulns[ii], lastVulnS-smallUsersVulns[ii], lastVulnB-bigUsersVulns[ii])
+			}
 			lastVulnB = bigUsersVulns[ii]
 			lastVulnS = smallUsersVulns[ii]
 		}
