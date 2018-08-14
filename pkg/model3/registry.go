@@ -22,7 +22,7 @@ func NewRegistry(maxBaseNames int, maxImages int) *Registry {
 	r.Images = make(map[string]*Image)
 	// make a bunch of base images...
 	for i := 0; i < maxBaseNames; i++ {
-		fmt.Printf(fmt.Sprintf("making new image %v", i))
+		//fmt.Printf(fmt.Sprintf("making new image %v", i))
 		i := NewImage(randomdata.SillyName(), []string{"latest"})
 		r.Images[i.SHA] = i
 	}

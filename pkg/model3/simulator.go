@@ -1,6 +1,7 @@
 package model3
 
 import (
+	"math"
 	"strings"
 	"time"
 
@@ -32,7 +33,7 @@ type ClusterSim struct {
 }
 
 func (c *ClusterSim) Describe() string {
-	sA := fmt.Sprintf("apps: %v", len(c.Namespaces))
+	sA := fmt.Sprintf("%v", len(c.Namespaces))
 	uniq := map[string]bool{}
 	//total vulnerabilities.
 	for _, images := range c.Namespaces {
@@ -43,11 +44,27 @@ func (c *ClusterSim) Describe() string {
 		}
 	}
 
-	description := fmt.Sprintf("apps: %v images %v time:[%v] days, vulntime:[%v] days",
-		sA,                               // apps
-		len(uniq),                        // images
-		c.TimeSoFar().Hours()/24,         // days
-		c.VulnerabilityTime().Hours()/24) // how many days vulnerable
+	// longest safe run...
+	longest := 0.0
+	func() {
+		curr := 0.0
+		for _, v := range c.Vulns {
+			if v == 0 {
+				curr++
+			} else {
+				curr = 0
+			}
+			longest = math.Max(longest, curr)
+		}
+	}()
+
+	description := fmt.Sprintf("apps: %v , images: %v time:[%v] days, vulntime:[%v] days.  Longest run %v.",
+		sA,                       // apps
+		len(uniq),                // images
+		c.TimeSoFar().Hours()/24, // days
+		c.VulnerabilityTime().Hours()/24,
+		longest)
+
 	return description
 }
 
@@ -73,17 +90,21 @@ func (c *ClusterSim) VulnerabilityTime() time.Duration {
 		totalTime = totalTime + time.Duration(c.eventsProcessed)*c.TimeElapsedPerEvent(i)
 	}
 
-	logrus.Infof("vuln time: %v , total time: %v  [ %v ] ", totalVulnTime, totalTime, c.eventsProcessed)
+	//logrus.Infof("vuln time: %v , total time: %v  [ %v ] ", totalVulnTime, totalTime, c.eventsProcessed)
 	return totalVulnTime
 }
+
+var tooLow int
 
 func randApp(pods int, r *Registry) (string, map[string]*Image) {
 	ns := strings.ToLower(randomdata.SillyName())
 	numPods := util.RandIntFromDistribution(pods/2, pods/2)
 	if numPods <= 0 {
-		logrus.Warnf("Warning: had to set num pods to 1 b/c neg or zero value %v", numPods)
+		//logrus.Warnf("Warning: had to set num pods to 1 b/c neg or zero value %v", numPods)
+		tooLow++
 		numPods = 1
 	}
+	util.RandLog(5, fmt.Sprintf("num pods had to get set to 1, was 0 %v", tooLow))
 
 	allpods := make(map[string]*Image)
 	for i := 0; i < numPods; i++ {
@@ -130,13 +151,20 @@ func (c *ClusterSim) Initialize() {
 
 func (c *ClusterSim) initEvents() []func() {
 	c.events = []func(){}
+	d := 0
+	a := 0
+	s := 0
 	for {
 		// Decide how many total events to simulate.
 		deletes, adds := func() (deletes []string, adds map[string]map[string]*Image) {
 			adds = map[string]map[string]*Image{}
 			deletes = []string{}
 
-			// (1) plan all the changes that happened in this time span, w/o mutating anything.
+			// every namespace will lead to either
+			// 		1 - its own deletion
+			//		2 - the creation of a new namespace
+			// over time, the probability of adding/deleting is thus equal, resulting
+			// in dynamic equilibrium
 			for app, _ := range c.Namespaces {
 				// churn event !
 				if c.ChurnProbability > rand.Float32() {
@@ -154,35 +182,38 @@ func (c *ClusterSim) initEvents() []func() {
 		// Decide how many scan events we need to simulate.
 		scans := c.ScanCapacityPerSimulationPeriod
 
-		d := 0
-		a := 0
-		s := 0
 		// (2) now, do all the map mutation actions to an event q.
 		for _, app := range deletes {
+			d++
 			c.events = append(c.events, func() {
+				//		logrus.Infof("event:delete")
 				delete(c.Namespaces, app)
 			})
 		}
 		for app, pods := range adds {
+			a++
 			c.events = append(c.events, func() {
+				//		logrus.Infof("event:add")
 				c.Namespaces[app] = pods
 			})
 		}
+		// Warning: Its likely that if anything, some of these events will get truncated when we prune down to c.TotalActions.
 		for i := 0; i < scans; i++ {
+			s++
 			c.events = append(c.events, func() {
+				//		logrus.Infof("event:scan")
 				c.st.ScanNewImage()
 			})
 		}
 
 		if len(c.events)%2 == 0 {
-			logrus.Infof("events created so far: %v", len(c.events))
+			logrus.Infof("events created so far: %v ... (del %v, add %v, scan %v)", len(c.events), d, a, s)
 		}
-
 		if len(c.events) >= c.TotalActions {
-			logrus.Infof("--- events created --- %v ( %v %v %v )", len(c.events), d, a, s)
-			return c.events
+			break
 		}
 	}
+	return c.events
 }
 
 // Increment Increments the state of the cluster by one time period.  i.e. one day.
@@ -208,7 +239,7 @@ func (c *ClusterSim) RunAllEvents() {
 		c.eventsProcessed++
 		c.UpdateMetrics()
 		c.VulnerabilityTime()
-		logrus.Infof("remaining events: %v", len(c.events))
+		//logrus.Infof("remaining events: %v", len(c.events))
 	}
 	logrus.Infof("done !")
 }
@@ -279,6 +310,6 @@ func (c *ClusterSim) Simulate() {
 	c.RunAllEvents()
 	logrus.Infof(c.Describe())
 
-	x, y := c.Plot()
-	logrus.Infof("%v %v", x, y)
+	// x, y := c.Plot()
+	// logrus.Infof("%v %v", x, y)
 }

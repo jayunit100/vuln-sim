@@ -26,7 +26,9 @@ func (s *ScanTool) ScanNewImage() {
 	for k, v := range s.Queue {
 		_, scanned := s.Scanned[k]
 		if !scanned {
+			delete(s.Queue, k)
 			s.Scanned[k] = v
+			//logrus.Infof("Scanned: H %v M %v L %v", v.HasHighVulns, v.HasMedVulns, v.HasLowVulns)
 			return
 		}
 	}

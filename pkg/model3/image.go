@@ -6,7 +6,6 @@ import (
 
 	randomdata "github.com/Pallinder/go-randomdata"
 	"github.com/jayunit100/vuln-sim/pkg/util"
-	"github.com/sirupsen/logrus"
 )
 
 type Image struct {
@@ -19,7 +18,7 @@ type Image struct {
 }
 
 func NewImage(baseName string, tag []string) *Image {
-	logrus.Infof("%v %v %v", util.RandIntFromDistribution(5, 10), util.RandIntFromDistribution(5, 10), util.RandIntFromDistribution(5, 10))
+	//logrus.Infof("%v %v %v", util.RandIntFromDistribution(5, 10), util.RandIntFromDistribution(5, 10), util.RandIntFromDistribution(5, 10))
 
 	img := &Image{
 		SHA:          fmt.Sprintf("%v-%v", rand.Float32(), randomdata.PostalCode("")),
