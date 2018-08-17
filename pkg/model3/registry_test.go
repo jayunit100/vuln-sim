@@ -69,20 +69,16 @@ func TestRegVulns(t *testing.T) {
 			t.Fail()
 		}
 	}
-
 	if h == 0 || m == 0 || l == 0 {
 		t.Logf("Failure, 0's found: %v %v %v", l, m, h)
 		t.Fail()
 	}
-
 	if float32(h)/float32(maxImages) >= .3 || float32(m/maxImages) >= .3 || float32(l/maxImages) > .3 {
 		t.Logf("Failure, too many vulns found: %v %v %v", l, m, h)
 		t.Fail()
 	}
-
 	if float32(h)/float32(maxImages) < .25 {
 		t.Logf("Failure, NOT ENOUGH vulns found:  %v/%v = %v", h, maxImages, float32(h)/float32(maxImages))
 		t.Fail()
 	}
-
 }

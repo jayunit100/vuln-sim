@@ -50,6 +50,14 @@ func RandIntFromDistribution(median int, deviation int) int {
 	return f
 }
 
+func RandFloatFromDistribution(median float32, deviation float32) float32 {
+	ni := func(mu float32, sigma float32) float32 {
+		return float32(rand.NormFloat64()*float64(sigma) + float64(mu))
+	}
+	f := ni(float32(median), float32(deviation))
+	return f
+}
+
 // TODO make this generic if we can...
 func RandRemove(s []func()) (func(), []func()) {
 	if len(s) == 0 {

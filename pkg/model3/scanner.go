@@ -3,19 +3,30 @@ package model3
 // Scan Tool
 
 type ScanTool struct {
-	Queue   map[string]*Image
-	Scanned map[string]*Image
+	Queue      map[string]*Image
+	Scanned    map[string]*Image
+	Importance map[string]int
 }
 
 func (s *ScanTool) init() {
 	if s.Queue == nil {
 		s.Queue = map[string]*Image{}
 		s.Scanned = map[string]*Image{}
+		s.Importance = map[string]int{}
 	}
 }
+
+// Some images, after being queued, again become unimportant.
+func (s *ScanTool) DeprioritizeBy1(i *Image) {
+	s.init()
+	s.Importance[i.SHA]--
+}
+
+// Add an image to the scan Queue.  If it exists, only importance changes.
 func (s *ScanTool) Enqueue(i *Image) {
 	s.init()
 	s.Queue[i.SHA] = i
+	s.Importance[i.SHA]++
 }
 
 // ScanNewImage takes an image from the queue and 'scans' it, i.e.,

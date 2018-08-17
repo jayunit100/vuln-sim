@@ -9,12 +9,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/atgjack/prob"
-  packages = ["."]
-  revision = "6cfd5d401186c4cbb23db12ae7fb4e35aab7d8d1"
-
-[[projects]]
-  branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
@@ -32,17 +26,26 @@
   version = "v0.1.0"
 
 [[projects]]
+  name = "github.com/mattn/go-runewidth"
+  packages = ["."]
+  revision = "ce7b0b5c7b45a81508558cd1dba6bb1e4ddb51bb"
+  version = "v0.0.3"
+
+[[projects]]
   name = "github.com/matttproud/golang_protobuf_extensions"
   packages = ["pbutil"]
   revision = "c12348ce28de40eed0136aa2b644d0ee0650e56c"
   version = "v1.0.1"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/olekukonko/tablewriter"
+  packages = ["."]
+  revision = "d4647c9c7a84d847478d890b816b7d8b62b0b279"
+
+[[projects]]
   name = "github.com/prometheus/client_golang"
-  packages = [
-    "prometheus",
-    "prometheus/promhttp"
-  ]
+  packages = ["prometheus"]
   revision = "c5b7fccd204277076155f10851dad72b76a49317"
   version = "v0.8.0"
 
@@ -97,6 +100,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "fec05d16d248d29a040eada7586f4e69b97e5568ced871e0f5bcd116c6332b83"
+  inputs-digest = "df37ea8eef5ebea13d172eedcb1943e807dcdca295846804f781a2babb82c03f"
   solver-name = "gps-cdcl"
   solver-version = 1
