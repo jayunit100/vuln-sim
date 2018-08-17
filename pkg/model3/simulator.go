@@ -27,6 +27,7 @@ type ClusterSim struct {
 	Namespaces       map[string]map[string]*Image
 	ScansPerMinute   float32
 	Vulns            []int
+	VulnsHigh        []int
 	RegistrySize     int
 	Registry         *Registry
 	st               *ScanTool
@@ -74,7 +75,7 @@ func (c *ClusterSim) Describe() string {
 		}
 	}()
 
-	description := fmt.Sprintf("FINAL STATE: scanrate %v, \nScans done %v , \nReg size... %v \nApps... %v\nFinal vuln images that are running..... %v \nUnique images with vulnerabilities............ %v\nTime.......%.2f days \n*** Vuln time **** ....... %.2f days.\nLongest run of events when safe: %v\nTotalEvents... %v",
+	description := fmt.Sprintf("FINAL STATE: scanrate %v, \nScans done %v , \nReg size... %v \nApps... %v\nFinal vuln images that are running..... %v \nUnique images with vulnerabilities............ %v\nTime.......%.5f days \n*** Vuln time **** ....... %.2f days.\nLongest run of events when safe: %v\nTotalEvents... %v",
 		c.TotalScanActions(),
 		len(c.st.Scanned),
 		c.RegistrySize,
@@ -169,7 +170,6 @@ func (c *ClusterSim) initEvents() []func() {
 	c.events = []func(){}
 	d := 0
 	a := 0
-	s := 0
 	for {
 		// Decide how many total events to simulate.
 		deletes, adds := func() (deletes []string, adds map[string]map[string]*Image) {
@@ -216,7 +216,7 @@ func (c *ClusterSim) initEvents() []func() {
 		}
 
 		if len(c.events)%100 == 0 {
-			logrus.Infof("events created so far: %v ... (del %v, add %v, scan %v)", len(c.events), d, a, s)
+			logrus.Infof("events created so far: %v ... (del %v, add %v)", len(c.events), d, a)
 		}
 		if len(c.events) >= c.TotalActions() {
 			break
@@ -295,7 +295,11 @@ func (c *ClusterSim) UpdateMetrics() {
 			c.Vulns = append(c.Vulns, l+m+h)
 		} else {
 			c.Vulns = append(c.Vulns, 0)
-			//logrus.Infof("%v\n", c.Vulns)
+		}
+		if h > 0 {
+			c.VulnsHigh = append(c.VulnsHigh, h)
+		} else {
+			c.VulnsHigh = append(c.VulnsHigh, 0)
 		}
 	}
 	metrics()

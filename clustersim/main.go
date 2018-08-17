@@ -8,6 +8,7 @@ import (
 	// <- ui shortcut, optional
 
 	"github.com/jayunit100/vuln-sim/pkg/model3"
+	"github.com/jayunit100/vuln-sim/pkg/view"
 	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
 )
@@ -56,46 +57,66 @@ func test() {
 	table.Render()
 }
 
-func main() {
-
+func experiment1() {
 	c := &model3.ClusterSim{
 		ChurnProbability: .10,
 		EventsPerMinute:  10,
 		MaxPodsPerApp:    10,
 		NumUsers:         100,
 		RegistrySize:     1000,
-		ScansPerMinute:   float32(1),
-		SimTime:          time.Duration(5) * time.Hour,
+		ScansPerMinute:   float32(1000),
+		SimTime:          time.Duration(48) * time.Hour,
 	}
-
 	c.Simulate()
-
 	d := &model3.ClusterSim{
 		ChurnProbability: .10,
 		EventsPerMinute:  10,
 		MaxPodsPerApp:    10,
 		NumUsers:         100,
 		RegistrySize:     1000,
-		ScansPerMinute:   float32(5),
-		SimTime:          time.Duration(5) * time.Hour,
+		ScansPerMinute:   float32(2000),
+		SimTime:          time.Duration(48) * time.Hour,
+	}
+	d.Simulate()
+	logrus.Infof("%v", c.Describe())
+	logrus.Infof("%v", d.Describe())
+	view.LaunchUI(map[string]*model3.ClusterSim{
+		"sim1:": c,
+		"sim2:": d,
+	})
+}
+
+func EXPshowEffectOfDoublingUsers() {
+	base := &model3.ClusterSim{
+		ChurnProbability: .10,
+		EventsPerMinute:  10,
+		MaxPodsPerApp:    10,
+		NumUsers:         100,
+		RegistrySize:     1000,
+		ScansPerMinute:   float32(100),
+		SimTime:          time.Duration(100) * time.Hour,
 	}
 
+	b := *base
+	b.ScansPerMinute = 2 * base.ScansPerMinute
+	b.Simulate()
+
+	c := *base
+	c.NumUsers = 2 * base.NumUsers
+	c.Simulate()
+
+	d := *base
+	d.ScansPerMinute = 2 * base.ScansPerMinute
+	d.NumUsers = 2 * base.NumUsers
 	d.Simulate()
 
-	logrus.Infof("****************************************************")
-	logrus.Infof("****************************************************")
-	logrus.Infof("****************************************************")
-	logrus.Infof("****************************************************")
-	logrus.Infof("****************************************************")
-	logrus.Infof("****************************************************")
+	view.LaunchUI(map[string]*model3.ClusterSim{
+		"baseline:":          &b,
+		"2xUsers:":           &c,
+		"2xUsers2xScanRate:": &d,
+	})
+}
 
-	logrus.Infof("1 hubs..........")
-	logrus.Infof("%v", c.Describe())
-
-	logrus.Infof("****************************************************")
-	logrus.Infof("****************************************************")
-
-	logrus.Infof("10 hubs..........")
-	logrus.Infof("%v", d.Describe())
-
+func main() {
+	EXPshowEffectOfDoublingUsers()
 }
