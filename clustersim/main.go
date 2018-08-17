@@ -97,23 +97,32 @@ func EXPshowEffectOfDoublingUsers() {
 		SimTime:          time.Duration(100) * time.Hour,
 	}
 
+	done := make(chan bool)
+
 	b := *base
-	b.ScansPerMinute = 2 * base.ScansPerMinute
-	b.Simulate()
+	go func() {
+		b.ScansPerMinute = 2 * base.ScansPerMinute
+		done <- b.Simulate()
+	}()
 
 	c := *base
-	c.NumUsers = 2 * base.NumUsers
-	c.Simulate()
+	go func() {
+		c.NumUsers = 2 * base.NumUsers
+		done <- c.Simulate()
+	}()
 
-	d := *base
-	d.ScansPerMinute = 2 * base.ScansPerMinute
-	d.NumUsers = 2 * base.NumUsers
-	d.Simulate()
-
+	<-done
+	<-done
+	/**
+		d := *base
+		d.ScansPerMinute = 2 * base.ScansPerMinute
+		d.NumUsers = 2 * base.NumUsers
+		d.Simulate()
+	**/
 	view.LaunchUI(map[string]*model3.ClusterSim{
-		"baseline:":          &b,
-		"2xUsers:":           &c,
-		"2xUsers2xScanRate:": &d,
+		"2xScanRate:": &b,
+		"2xUsers:":    &c,
+		//		"2xUsers2xScanRate:": &d,
 	})
 }
 

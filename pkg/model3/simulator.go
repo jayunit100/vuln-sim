@@ -325,7 +325,7 @@ func (c *ClusterSim) Plot() ([]float64, []float64) {
 	return dataX, dataY
 }
 
-func (c *ClusterSim) Simulate() {
+func (c *ClusterSim) Simulate() bool {
 	if c.Registry == nil && c.RegistrySize == 0 {
 		panic("registry size, at least, must be given ... or create the registry yourself.")
 	}
@@ -333,6 +333,7 @@ func (c *ClusterSim) Simulate() {
 	c.RunAllEvents()
 	logrus.Infof(c.Describe())
 
+	return true
 	// x, y := c.Plot()
 	// logrus.Infof("%v %v", x, y)
 }
