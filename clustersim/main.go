@@ -58,12 +58,6 @@ func test() {
 
 func main() {
 
-	//	test()
-	//	return
-
-	testUI()
-	return
-
 	c := &model3.ClusterSim{
 		ChurnProbability: .10,
 		EventsPerMinute:  10,
