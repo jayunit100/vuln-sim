@@ -21,7 +21,7 @@ type ClusterSim struct {
 	NumUsers         int
 	MaxPodsPerApp    int
 	ChurnProbability float32
-	events           []func()
+	events           []func() string
 	eventsProcessed  int
 	EventsPerMinute  int // Determines Total Actions...
 	Namespaces       map[string]map[string]*Image
@@ -31,6 +31,7 @@ type ClusterSim struct {
 	RegistrySize     int
 	Registry         *Registry
 	st               *ScanTool
+	ActionLog        []map[string]int // [ {"adds",1}.{"deletes",3}], ...}
 }
 
 // TotalActions returns the amount of total actions which will ever occur.
@@ -166,8 +167,8 @@ func (c *ClusterSim) Initialize() {
 	c.events = c.initEvents()
 }
 
-func (c *ClusterSim) initEvents() []func() {
-	c.events = []func(){}
+func (c *ClusterSim) initEvents() []func() string {
+	c.events = []func() string{}
 	d := 0
 	a := 0
 	for {
@@ -199,19 +200,21 @@ func (c *ClusterSim) initEvents() []func() {
 		// (2) now, do all the map mutation actions to an event q.
 		for _, app := range deletes {
 			d++
-			c.events = append(c.events, func() {
+			c.events = append(c.events, func() string {
 				//		logrus.Infof("event:delete")
 				delete(c.Namespaces, app)
 				for _, img := range c.Namespaces[app] {
 					c.st.DeprioritizeBy1(img)
 				}
+				return "delete"
 			})
 		}
 		for app, pods := range adds {
 			a++
-			c.events = append(c.events, func() {
+			c.events = append(c.events, func() string {
 				//		logrus.Infof("event:add")
 				c.Namespaces[app] = pods
+				return "add"
 			})
 		}
 
@@ -251,7 +254,6 @@ func (c *ClusterSim) RunAllEvents() {
 
 		// simulate concurrency by doing this without actually incrementing events separately.
 		scans := util.RandFloatFromDistribution(float32(c.AvgScansPerEvent()), float32(c.AvgScansPerEvent()/2))
-		//logrus.Infof("scans: %v", scans)
 		for i := 0; i < int(scans); i++ {
 			c.st.ScanNewImage()
 		}

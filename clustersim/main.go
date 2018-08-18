@@ -94,7 +94,7 @@ func EXPshowEffectOfDoublingUsers() {
 		NumUsers:         100,
 		RegistrySize:     1000,
 		ScansPerMinute:   float32(100),
-		SimTime:          time.Duration(100) * time.Hour,
+		SimTime:          time.Duration(20) * time.Hour,
 	}
 
 	done := make(chan bool)
@@ -113,16 +113,10 @@ func EXPshowEffectOfDoublingUsers() {
 
 	<-done
 	<-done
-	/**
-		d := *base
-		d.ScansPerMinute = 2 * base.ScansPerMinute
-		d.NumUsers = 2 * base.NumUsers
-		d.Simulate()
-	**/
+
 	view.LaunchUI(map[string]*model3.ClusterSim{
 		"2xScanRate:": &b,
 		"2xUsers:":    &c,
-		//		"2xUsers2xScanRate:": &d,
 	})
 }
 

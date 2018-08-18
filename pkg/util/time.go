@@ -59,12 +59,12 @@ func RandFloatFromDistribution(median float32, deviation float32) float32 {
 }
 
 // TODO make this generic if we can...
-func RandRemove(s []func()) (func(), []func()) {
+func RandRemove(s []func() string) (func() string, []func() string) {
 	if len(s) == 0 {
 		panic("0 length array !")
 	}
 	if len(s) == 1 {
-		return s[0], []func(){}
+		return s[0], []func() string{}
 	}
 	i := rand.Intn(len(s))
 	ff := s[i]
