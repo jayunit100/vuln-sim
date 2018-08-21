@@ -272,7 +272,10 @@ func (c *ClusterSim) RunAllEvents() {
 
 			// once you hit an integer value, complete a scan, (some fail, common if failure rate is high).
 			if c.ScanFailureRate() < rand.Float32() {
-				for int(scans) > len(c.st.Scanned) {
+				// every so often, the # of total scans increases by an integer value.
+				// at a scan a minute, it increases typically .1 or so per event , assuming 10 events / minute.
+				// when that happens, we make sure to 'scan a new image'.
+				for len(c.st.Queue) > 0 && int(scans) > len(c.st.Scanned) {
 					c.st.ScanNewImage()
 				}
 			}
@@ -281,7 +284,7 @@ func (c *ClusterSim) RunAllEvents() {
 		e()
 		c.eventsProcessed++
 		c.UpdateMetrics()
-		c.VulnerabilityTime()
+		// c.VulnerabilityTime()
 	}
 	logrus.Infof("scans: %v", scans)
 }
@@ -291,6 +294,7 @@ func (c *ClusterSim) RunAllEvents() {
 // scraped, due to simulation velocity.
 
 func (c *ClusterSim) UpdateMetrics() {
+	logrus.Infof("Update metrics, %v", c.eventsProcessed)
 	eventId := c.eventsProcessed
 	// immediately invoked self executing function !
 	metrics := func() {

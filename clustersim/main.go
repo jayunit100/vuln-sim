@@ -95,7 +95,7 @@ func ExperimentalSimulation1() {
 		NumUsers:         100,
 		RegistrySize:     10000,
 		ScansPerMinute:   float32(2), // this is really fast !
-		SimTime:          time.Duration(48) * time.Hour,
+		SimTime:          time.Duration(24*365) * time.Hour,
 	}
 
 	done := make(chan bool)
@@ -109,16 +109,7 @@ func ExperimentalSimulation1() {
 	c := *base
 
 	// simulation #2
-	stormOccured := false
 	go func() {
-		c.ScanFailureRate = func() float32 {
-			if !stormOccured && c.TimeSoFar().Hours() > 5 {
-				stormOccured = true
-				return .5
-			} else {
-				return 0
-			}
-		}
 		done <- c.Simulate()
 	}()
 
