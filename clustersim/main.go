@@ -89,13 +89,13 @@ func experiment1() {
 
 func ExperimentalSimulation1() {
 	base := &model3.ClusterSim{
-		ChurnProbability: .10,
+		ChurnProbability: .05,
 		EventsPerMinute:  10,
 		MaxPodsPerApp:    10,
 		NumUsers:         100,
-		RegistrySize:     1000,
+		RegistrySize:     10000,
 		ScansPerMinute:   float32(2), // this is really fast !
-		SimTime:          time.Duration(20) * time.Hour,
+		SimTime:          time.Duration(48) * time.Hour,
 	}
 
 	done := make(chan bool)

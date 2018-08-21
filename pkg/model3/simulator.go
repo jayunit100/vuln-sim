@@ -269,10 +269,12 @@ func (c *ClusterSim) RunAllEvents() {
 		runScans := func() {
 			// make incremental progress, i.e. 1/2 a scan, 1/3 a scan, ... every time point.
 			scans += util.RandFloatFromDistribution(float32(c.AvgScansPerEvent()), float32(c.AvgScansPerEvent()))
-			logrus.Infof("%v scans suggested, assuming no failure stochastic", scans)
-			// once you hit an integer value, complete a scan.
-			if int(scans) > len(c.st.Scanned) {
-				c.st.ScanNewImage()
+
+			// once you hit an integer value, complete a scan, (some fail, common if failure rate is high).
+			if c.ScanFailureRate() < rand.Float32() {
+				for int(scans) > len(c.st.Scanned) {
+					c.st.ScanNewImage()
+				}
 			}
 		}
 		runScans()
