@@ -26,6 +26,7 @@ type ClusterSim struct {
 	EventsPerMinute  int // Determines Total Actions...
 	Namespaces       map[string]map[string]*Image
 	ScansPerMinute   float32
+	ScanFailureRate  func() float32
 	Vulns            []int
 	VulnsHigh        []int
 	RegistrySize     int
@@ -76,7 +77,7 @@ func (c *ClusterSim) Describe() string {
 		}
 	}()
 
-	description := fmt.Sprintf("FINAL STATE: scanrate %v, \nScans done %v , \nReg size... %v \nApps... %v\nFinal vuln images that are running..... %v \nUnique images with vulnerabilities............ %v\nTime.......%.5f days \n*** Vuln time **** ....... %.2f days.\nLongest run of events when safe: %v\nTotalEvents... %v",
+	description := fmt.Sprintf("FINAL STATE: scanrate %v, \nScans done %v , \nReg size... %v \nApps... %v\nFinal vuln images that are running..... %v \nUnique images with vulnerabilities............ %v\nTime.......%.5f days \n*** Vuln time **** ....... %.2f days.\nLongest run of events when safe: %v (out of %v)",
 		c.TotalScanActions(),
 		len(c.st.Scanned),
 		c.RegistrySize,
@@ -137,6 +138,15 @@ func randApp(pods int, r *Registry) (string, map[string]*Image) {
 
 func (c *ClusterSim) Initialize() {
 	m := map[string]map[string]*Image{}
+
+	// This is a knob that simulates a 'scan' tool which degrades performance over time.
+	if c.ScanFailureRate == nil {
+		logrus.Infof("ChurnProbabiltiyFunction is nil, setting a default to return the constant.")
+		c.ScanFailureRate = func() float32 {
+			return 0
+		}
+	}
+
 	c.Namespaces = m
 	if c.SimTime == 0*time.Second {
 		panic("Need a sim time of non zero: How long do you want to simulate events for???")
@@ -225,6 +235,8 @@ func (c *ClusterSim) initEvents() []func() string {
 			break
 		}
 	}
+	// for performance, otherwise, append calls over time of simulation, can take minutes.
+	c.Vulns = make([]int, len(c.events)+1)
 	return c.events
 }
 
@@ -252,23 +264,34 @@ func (c *ClusterSim) RunAllEvents() {
 		e, _c := util.RandRemove(c.events)
 		c.events = _c
 
-		// simulate concurrency by doing this without actually incrementing events separately.
-		scans := util.RandFloatFromDistribution(float32(c.AvgScansPerEvent()), float32(c.AvgScansPerEvent()/2))
-		for i := 0; i < int(scans); i++ {
-			c.st.ScanNewImage()
+		runScans := func() {
+			// simulate concurrency by doing this without actually incrementing events separately.
+			scans := util.RandFloatFromDistribution(float32(c.AvgScansPerEvent()), float32(c.AvgScansPerEvent()/2))
+			for i := 0; i < int(scans); i++ {
+				// a high scan failure rate leads to short-circuiting the scans.
+				// if this happens at a time when theres a lot of images being added...
+				// WHAM! Large surface area on your cluster for attack.
+				if rand.Float32() > c.ScanFailureRate() {
+					c.st.ScanNewImage()
+				}
+			}
 		}
+		runScans()
 		e()
 		c.eventsProcessed++
 		c.UpdateMetrics()
 		c.VulnerabilityTime()
 	}
 	//logrus.Infof("remaining events: %v", len(c.events))
+
 }
 
 // UpdateMetrics updates prometheus metrics.  Note that it also updates the total vulns, which
 // records the values at every time point in the simulation.  This is b/c some metrics may not be
 // scraped, due to simulation velocity.
+
 func (c *ClusterSim) UpdateMetrics() {
+	eventId := c.eventsProcessed
 	// immediately invoked self executing function !
 	metrics := func() {
 		var h, m, l int
@@ -294,15 +317,17 @@ func (c *ClusterSim) UpdateMetrics() {
 			}
 		}
 		if l > 0 || m > 0 || h > 0 {
-			c.Vulns = append(c.Vulns, l+m+h)
+			c.Vulns[eventId] = l + m + h
 		} else {
-			c.Vulns = append(c.Vulns, 0)
+			c.Vulns[eventId] = 0
 		}
+		/**
 		if h > 0 {
 			c.VulnsHigh = append(c.VulnsHigh, h)
 		} else {
 			c.VulnsHigh = append(c.VulnsHigh, 0)
 		}
+		**/
 	}
 	metrics()
 }

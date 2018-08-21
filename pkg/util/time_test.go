@@ -2,6 +2,8 @@ package util
 
 import (
 	"testing"
+
+	"github.com/sirupsen/logrus"
 )
 
 // NewImage returns an image.
@@ -20,4 +22,14 @@ func TestNewApp(t *testing.T) {
 		return
 	}
 	t.Fail()
+}
+
+func TestMapNums(t *testing.T) {
+	m := MapNums([]int{100, 101, 202, 303, 440, 500, 695, 712, 812, 949}, 4)
+	for k, v := range m {
+		logrus.Infof("%v %v", k, v)
+	}
+	if len(m) != 5 {
+		t.Fail()
+	}
 }

@@ -10,9 +10,9 @@ type ScanTool struct {
 
 func (s *ScanTool) init() {
 	if s.Queue == nil {
-		s.Queue = map[string]*Image{}
-		s.Scanned = map[string]*Image{}
-		s.Importance = map[string]int{}
+		s.Queue = make(map[string]*Image, 10000)
+		s.Scanned = make(map[string]*Image, 10000)
+		s.Importance = make(map[string]int, 10000)
 	}
 }
 
@@ -34,6 +34,7 @@ func (s *ScanTool) Enqueue(i *Image) {
 // b/c each image has a fundamental 'truth' associated with it.
 func (s *ScanTool) ScanNewImage() {
 	s.init()
+
 	for k, v := range s.Queue {
 		_, scanned := s.Scanned[k]
 		if !scanned {

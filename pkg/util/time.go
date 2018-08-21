@@ -1,7 +1,9 @@
 package util
 
 import (
+	"math"
 	"math/rand"
+	"sort"
 	"strings"
 	"time"
 
@@ -56,6 +58,42 @@ func RandFloatFromDistribution(median float32, deviation float32) float32 {
 	}
 	f := ni(float32(median), float32(deviation))
 	return f
+}
+
+// MapNums maps a big array into a smaller one, and returns the
+// array of keys to iterate through that array in sorted order.
+// Example: Used by the UI to visualize 20 spread out data points from a
+// simulation potentially including 1000s of events, for a quick birds
+// eye view.
+func MapNums(input []int, max int) ([]int, map[int]int) {
+	// 10 -> 4 : every other element:
+	// 0 3 6 9
+	factor := float64(len(input)) / float64(max)
+	ret := map[int]int{}
+
+	if len(input) < 3 {
+		for i, v := range input {
+			ret[i] = v
+		}
+	} else {
+
+		for i := 1; len(ret) < max; i += int(math.Ceil(factor)) {
+			if i > len(input)-1 {
+				ret[i] = input[len(input)-1]
+			} else {
+				ret[i] = input[i]
+			}
+		}
+	}
+
+	// sort all the events
+	var keys []int
+	for k := range ret {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+
+	return keys, ret
 }
 
 // TODO make this generic if we can...

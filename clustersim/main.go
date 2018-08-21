@@ -10,6 +10,7 @@ import (
 	"github.com/jayunit100/vuln-sim/pkg/model3"
 	"github.com/jayunit100/vuln-sim/pkg/view"
 	"github.com/olekukonko/tablewriter"
+	"github.com/pkg/profile"
 	"github.com/sirupsen/logrus"
 )
 
@@ -86,28 +87,38 @@ func experiment1() {
 	})
 }
 
-func EXPshowEffectOfDoublingUsers() {
+func ExperimentalSimulation1() {
 	base := &model3.ClusterSim{
 		ChurnProbability: .10,
 		EventsPerMinute:  10,
 		MaxPodsPerApp:    10,
 		NumUsers:         100,
 		RegistrySize:     1000,
-		ScansPerMinute:   float32(100),
-		SimTime:          time.Duration(20) * time.Hour,
+		ScansPerMinute:   float32(10),
+		SimTime:          time.Duration(100) * time.Hour,
 	}
 
 	done := make(chan bool)
 
+	// simulation #1: baseline.
 	b := *base
 	go func() {
-		b.ScansPerMinute = 2 * base.ScansPerMinute
 		done <- b.Simulate()
 	}()
 
 	c := *base
+
+	// simulation #2
+	stormOccured := false
 	go func() {
-		c.NumUsers = 2 * base.NumUsers
+		c.ScanFailureRate = func() float32 {
+			if !stormOccured && c.TimeSoFar().Hours() > 5 {
+				stormOccured = true
+				return 0
+			} else {
+				return 0
+			}
+		}
 		done <- c.Simulate()
 	}()
 
@@ -121,5 +132,7 @@ func EXPshowEffectOfDoublingUsers() {
 }
 
 func main() {
-	EXPshowEffectOfDoublingUsers()
+	defer profile.Start().Stop()
+
+	ExperimentalSimulation1()
 }
