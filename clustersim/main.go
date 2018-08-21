@@ -94,8 +94,8 @@ func ExperimentalSimulation1() {
 		MaxPodsPerApp:    10,
 		NumUsers:         100,
 		RegistrySize:     1000,
-		ScansPerMinute:   float32(10),
-		SimTime:          time.Duration(100) * time.Hour,
+		ScansPerMinute:   float32(2), // this is really fast !
+		SimTime:          time.Duration(20) * time.Hour,
 	}
 
 	done := make(chan bool)
@@ -114,7 +114,7 @@ func ExperimentalSimulation1() {
 		c.ScanFailureRate = func() float32 {
 			if !stormOccured && c.TimeSoFar().Hours() > 5 {
 				stormOccured = true
-				return 0
+				return .5
 			} else {
 				return 0
 			}

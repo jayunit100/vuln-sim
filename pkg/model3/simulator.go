@@ -259,21 +259,20 @@ func (c *ClusterSim) AvgScansPerEvent() float32 {
 	return scanProbability
 }
 
+var scans float32
+
 func (c *ClusterSim) RunAllEvents() {
 	for len(c.events) > 0 {
 		e, _c := util.RandRemove(c.events)
 		c.events = _c
 
 		runScans := func() {
-			// simulate concurrency by doing this without actually incrementing events separately.
-			scans := util.RandFloatFromDistribution(float32(c.AvgScansPerEvent()), float32(c.AvgScansPerEvent()/2))
-			for i := 0; i < int(scans); i++ {
-				// a high scan failure rate leads to short-circuiting the scans.
-				// if this happens at a time when theres a lot of images being added...
-				// WHAM! Large surface area on your cluster for attack.
-				if rand.Float32() > c.ScanFailureRate() {
-					c.st.ScanNewImage()
-				}
+			// make incremental progress, i.e. 1/2 a scan, 1/3 a scan, ... every time point.
+			scans += util.RandFloatFromDistribution(float32(c.AvgScansPerEvent()), float32(c.AvgScansPerEvent()))
+			logrus.Infof("%v scans suggested, assuming no failure stochastic", scans)
+			// once you hit an integer value, complete a scan.
+			if int(scans) > len(c.st.Scanned) {
+				c.st.ScanNewImage()
 			}
 		}
 		runScans()
@@ -282,8 +281,7 @@ func (c *ClusterSim) RunAllEvents() {
 		c.UpdateMetrics()
 		c.VulnerabilityTime()
 	}
-	//logrus.Infof("remaining events: %v", len(c.events))
-
+	logrus.Infof("scans: %v", scans)
 }
 
 // UpdateMetrics updates prometheus metrics.  Note that it also updates the total vulns, which
