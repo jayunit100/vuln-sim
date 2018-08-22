@@ -27,12 +27,18 @@ type ClusterSim struct {
 	Namespaces       map[string]map[string]*Image
 	ScansPerMinute   float32
 	ScanFailureRate  func() float32
-	Vulns            []int
-	VulnsHigh        []int
-	RegistrySize     int
-	Registry         *Registry
-	st               *ScanTool
-	ActionLog        []map[string]int // [ {"adds",1}.{"deletes",3}], ...}
+	CurrentVulns     map[string]map[string]int
+	VulnsAsMap       map[int]map[string]map[string]int
+	/**
+	{
+		104810:{"myns1":{"high":2,"med":3,"low":10},
+			   {"myns2":{"high":2,"med":3,"low":10}
+	**/
+	RegistrySize          int
+	Registry              *Registry
+	st                    *ScanTool
+	ActionLog             []map[string]int // [ {"adds",1}.{"deletes",3}], ...}
+	SimulationRunComplete bool
 }
 
 // TotalActions returns the amount of total actions which will ever occur.
@@ -46,7 +52,34 @@ func (c *ClusterSim) TotalScanActions() float32 {
 	return float32(float64(c.ScansPerMinute) * c.SimTime.Minutes())
 }
 
+func (c *ClusterSim) Vulns() []int {
+	if len(c.VulnsAsMap) == 0 {
+		panic("no data in the vulns as map structure!")
+	}
+	vulns := []int{}
+	for _, appWVulns := range c.VulnsAsMap {
+		for appKey := range appWVulns {
+			vulns = append(vulns, appWVulns[appKey]["high"])
+		}
+	}
+
+	// If we see a single non zero vuln, return, this is just a hack
+	// to make sure changes to the algorithm that result in no vulns
+	// in the first 100 trials are panicked, fast :).
+	for i, v := range vulns {
+		if v != 0 {
+			return vulns
+		} else if i > 20 {
+			panic(fmt.Sprintf("WARNING: NO VULNS FOR FIRST 100 EVENTS , MUST BE A BUG %v", len(vulns)))
+		}
+	}
+	return vulns
+}
+
 func (c *ClusterSim) Describe() string {
+	if !c.SimulationRunComplete {
+		panic("Cant describe before simulation ran !")
+	}
 	sA := fmt.Sprintf("%v", len(c.Namespaces))
 
 	uniqImages := map[string]bool{}
@@ -67,7 +100,7 @@ func (c *ClusterSim) Describe() string {
 	longest := 0.0
 	func() {
 		curr := 0.0
-		for _, v := range c.Vulns {
+		for _, v := range c.Vulns() {
 			if v == 0 {
 				curr++
 			} else {
@@ -106,7 +139,7 @@ func (c *ClusterSim) TimeElapsedPerEvent(eventID int) time.Duration {
 // VulnerabilityTime returns the total amount of time that you've been vulnerable.
 func (c *ClusterSim) VulnerabilityTime() time.Duration {
 	totalVulnTime := 0 * time.Second
-	for i, v := range c.Vulns {
+	for i, v := range c.Vulns() {
 		if v > 0 {
 			totalVulnTime = totalVulnTime + c.TimeElapsedPerEvent(i)
 		}
@@ -126,8 +159,6 @@ func randApp(pods int, r *Registry) (string, map[string]*Image) {
 		tooLow++
 		numPods = 1
 	}
-	//util.RandLog(2, fmt.Sprintf("num pods had to get set to 1, was 0 %v", tooLow))
-
 	allpods := make(map[string]*Image)
 	for i := 0; i < numPods; i++ {
 		img := r.RandImageFrom()
@@ -137,6 +168,8 @@ func randApp(pods int, r *Registry) (string, map[string]*Image) {
 }
 
 func (c *ClusterSim) Initialize() {
+	c.VulnsAsMap = make(map[int]map[string]map[string]int)
+	c.CurrentVulns = make(map[string]map[string]int, 10*1000)
 	m := map[string]map[string]*Image{}
 
 	// This is a knob that simulates a 'scan' tool which degrades performance over time.
@@ -152,7 +185,6 @@ func (c *ClusterSim) Initialize() {
 		panic("Need a sim time of non zero: How long do you want to simulate events for???")
 	}
 	c.st = &ScanTool{}
-	c.Vulns = []int{}
 
 	if c.EventsPerMinute == 0 {
 		panic("time period must be non-zero")
@@ -210,22 +242,46 @@ func (c *ClusterSim) initEvents() []func() string {
 		// (2) now, do all the map mutation actions to an event q.
 		for _, app := range deletes {
 			d++
-			c.events = append(c.events, func() string {
-				//		logrus.Infof("event:delete")
-				delete(c.Namespaces, app)
-				for _, img := range c.Namespaces[app] {
-					c.st.DeprioritizeBy1(img)
-				}
-				return "delete"
-			})
+			c.events = append(c.events,
+				// ****************************
+				// SIMULATE: DELETING AN EXISTING NAMESPACE
+				func() string {
+					delete(c.Namespaces, app)
+					for _, img := range c.Namespaces[app] {
+						c.st.DeprioritizeBy1(img)
+					}
+					c.RegisterDelete(app)
+					return "delete"
+				})
 		}
 		for app, pods := range adds {
 			a++
-			c.events = append(c.events, func() string {
-				//		logrus.Infof("event:add")
-				c.Namespaces[app] = pods
-				return "add"
-			})
+			c.events = append(c.events,
+				// *****************************
+				// SIMULATE: CREATE A NEW NAMESPACE
+				func() string {
+					c.Namespaces[app] = pods
+					l := 0
+					m := 0
+					h := 0
+					for _, img := range pods {
+						// IMPORTANT if statement ! We only flag Vunlerabilities if the image is
+						// NOT scanned yet.  Obviously.
+						if _, ok := c.st.Scanned[img.SHA]; !ok {
+							if img.HasHighVulns {
+								h++
+							}
+							if img.HasMedVulns {
+								m++
+							}
+							if img.HasLowVulns {
+								l++
+							}
+						}
+					}
+					c.RegisterAdd(app, map[string]int{"high": h, "med": m, "low": l})
+					return "add"
+				})
 		}
 
 		if len(c.events)%100 == 0 {
@@ -236,8 +292,17 @@ func (c *ClusterSim) initEvents() []func() string {
 		}
 	}
 	// for performance, otherwise, append calls over time of simulation, can take minutes.
-	c.Vulns = make([]int, len(c.events)+1)
 	return c.events
+}
+
+func (c *ClusterSim) RegisterDelete(app string) {
+	delete(c.CurrentVulns, app)
+
+}
+
+// Register adding unknown vulnerabilities to the cluster.
+func (c *ClusterSim) RegisterAdd(app string, vulns map[string]int) {
+	c.CurrentVulns[app] = vulns
 }
 
 // Increment Increments the state of the cluster by one time period.  i.e. one day.
@@ -281,10 +346,18 @@ func (c *ClusterSim) RunAllEvents() {
 			}
 		}
 		runScans()
-		e()
+		logrus.Infof("Running event :%v ", e())
 		c.eventsProcessed++
-		c.UpdateMetrics()
-		// c.VulnerabilityTime()
+		c.VulnsAsMap[c.eventsProcessed] = map[string]map[string]int{}
+
+		for k, v := range c.CurrentVulns {
+			logrus.Infof("Current vulns %v", c.CurrentVulns)
+			vulnsForThisNS := map[string]int{}
+			for kk, vv := range v {
+				vulnsForThisNS[kk] = vv
+			}
+			c.VulnsAsMap[c.eventsProcessed][k] = vulnsForThisNS
+		}
 	}
 	logrus.Infof("scans: %v", scans)
 }
@@ -293,66 +366,21 @@ func (c *ClusterSim) RunAllEvents() {
 // records the values at every time point in the simulation.  This is b/c some metrics may not be
 // scraped, due to simulation velocity.
 
-func (c *ClusterSim) UpdateMetrics() {
-	logrus.Infof("Update metrics, %v", c.eventsProcessed)
-	eventId := c.eventsProcessed
-	// immediately invoked self executing function !
-	metrics := func() {
-		var h, m, l int
-		// calculate steady state of vulns, emit metrics.
-		for _, images := range c.Namespaces {
-			for _, img := range images {
-				// if unscanned... queue it.
-				if _, ok := c.st.Scanned[img.SHA]; !ok {
-					c.st.Enqueue(img)
-					// if not scanned, increment its vulns...
-					if !ok {
-						if img.HasHighVulns {
-							h++
-						}
-						if img.HasMedVulns {
-							m++
-						}
-						if img.HasLowVulns {
-							l++
-						}
-					}
-				}
-			}
-		}
-		if l > 0 || m > 0 || h > 0 {
-			c.Vulns[eventId] = l + m + h
-		} else {
-			c.Vulns[eventId] = 0
-		}
-		/**
-		if h > 0 {
-			c.VulnsHigh = append(c.VulnsHigh, h)
-		} else {
-			c.VulnsHigh = append(c.VulnsHigh, 0)
-		}
-		**/
-	}
-	metrics()
-}
-
 func (c *ClusterSim) TimeSoFar() time.Duration {
 	d := 0 * time.Second
 	for i := 0; i < c.eventsProcessed; i++ {
 		d = d + c.TimeElapsedPerEvent(i)
 	}
-	//	logrus.Infof("time soo far %v (events = %v)", d, c.eventsProcessed)
 	return d
 }
 
 func (c *ClusterSim) Plot() ([]float64, []float64) {
 	dataX := []float64{}
 	dataY := []float64{}
-	for i, v := range c.Vulns {
+	for i, v := range c.Vulns() {
 		dataX = append(dataX, float64(i))
 		dataY = append(dataY, float64(v))
 	}
-
 	return dataX, dataY
 }
 
@@ -362,9 +390,7 @@ func (c *ClusterSim) Simulate() bool {
 	}
 	c.Initialize()
 	c.RunAllEvents()
-	logrus.Infof(c.Describe())
-
+	c.SimulationRunComplete = true
+	//logrus.Infof(c.Describe())
 	return true
-	// x, y := c.Plot()
-	// logrus.Infof("%v %v", x, y)
 }

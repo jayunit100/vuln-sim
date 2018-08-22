@@ -2,107 +2,51 @@ package model3
 
 import (
 	"fmt"
-	"math"
 	"testing"
 	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
-func TestCompareSmallAndLargeSimulations(t *testing.T) {
-	// Just codifies some heurstics, for example:
-	// 	- both simulations should be equal at the end.
-	//	- the smaller simulation should have less vulnerabilities at the beggining.
-	//	- add more later, this test is again, only for codifying that 'trends' which
-	//	  approximate the real world actually occur.
-
-	regSize := 1000 // higher reg size: longer convergence factor.
-	c := Assert(.5, 10, regSize, 10, 10)
-	_, smallUsersVulns := c.Plot()
-	logrus.Infof("%v", c.VulnerabilityTime())
-
-	d := Assert(.5, 100, regSize, 100, 10)
-	_, bigUsersVulns := d.Plot()
-	logrus.Infof("%v vs %v", c.VulnerabilityTime(), d.VulnerabilityTime())
-	logrus.Infof("%v %v", len(smallUsersVulns), len(bigUsersVulns))
-
-	// simulationLen: The exact # of events isnt the same, truncate the last few from the longer simulation...
-	// difference of last 2 or 3 events is negligible...
-	simulationLen := len(bigUsersVulns)
-	if len(smallUsersVulns) < len(bigUsersVulns) {
-		simulationLen = len(smallUsersVulns)
+func TestSimpleConvergence(t *testing.T) {
+	c := &ClusterSim{
+		ChurnProbability: .9, // high churn, faster exposure of vulns
+		EventsPerMinute:  10,
+		MaxPodsPerApp:    10,
+		NumUsers:         10,
+		RegistrySize:     10, // small registry, faster convergence to 0 unknown vulns
+		ScansPerMinute:   float32(1000),
+		SimTime:          time.Duration(10) * time.Minute,
 	}
 
-	// debug the deltas.
-	// the differences are printed out, showing the delta of # of vulnerable in cluster images.
-	func() {
-		lastVulnB := 0.0
-		lastVulnS := 0.0
-		for ii, _ := range smallUsersVulns {
-			if ii >= simulationLen {
-				continue
-			}
-			if ii%10 == 0 {
-				logrus.Infof("%v: %v %v diff=(%v %v)", ii, smallUsersVulns[ii], bigUsersVulns[ii], lastVulnS-smallUsersVulns[ii], lastVulnB-bigUsersVulns[ii])
-				lastVulnB = bigUsersVulns[ii]
-				lastVulnS = smallUsersVulns[ii]
-			}
-		}
-	}()
-
-	func() {
-		maxZerosB := 0.0
-		zerosB := 0.0
-
-		maxZerosS := 0.0
-		zerosS := 0.0
-
-		for ii, _ := range smallUsersVulns {
-			if ii >= simulationLen {
-				continue
-			}
-			if smallUsersVulns[ii] == 0 {
-				zerosS++
-			} else {
-				zerosS = 0
-			}
-			if bigUsersVulns[ii] == 0 {
-				zerosB++
-			} else {
-				zerosB = 0
-			}
-
-			// in case the string we're on is longer then the longest so far, we update our max length.
-			maxZerosS = math.Max(zerosS, maxZerosS)
-			maxZerosB = math.Max(zerosB, maxZerosB)
-		}
-
-		logrus.Infof("Longest run for small user set: %v", maxZerosS)
-		logrus.Infof("Longest run for large user set: %v", maxZerosB)
-	}()
-
-	if !(smallUsersVulns[0] < bigUsersVulns[0]) {
-		logrus.Infof("Failing ! Early on in the simulation: we expected small ( %v ) <  large ( %v ) ", smallUsersVulns[0], bigUsersVulns[0])
+	c.Simulate()
+	vulns := c.Vulns()
+	if len(vulns) == 0 {
 		t.Fail()
-		return
+	}
+	logrus.Infof("%v", len(vulns))
+
+	for i := 0; i < len(vulns); i++ {
+		logrus.Infof("%v %v", i, vulns[i])
 	}
 
-	logrus.Infof("[[[[[[ %v", len(smallUsersVulns))
-	logrus.Infof("[[[[[[ %v", len(bigUsersVulns))
-
-	if !(smallUsersVulns[2600] == bigUsersVulns[2600]) {
-		logrus.Infof("Failing ! Later on in the simulation: we expected small ( %v ) == large ( %v )", smallUsersVulns[300], bigUsersVulns[300])
-		t.Fail()
-		return
+	// By the end of the sim, we should easily be @ 0 vulnerabilities.
+	lastElements := []int{
+		len(vulns) - 1,
+		len(vulns) - 2,
+		len(vulns) - 3,
+		len(vulns) - 4,
+		len(vulns) - 5,
+		len(vulns) - 6,
+		len(vulns) - 7,
 	}
 
-	logrus.Infof("***************** *******************")
-	logrus.Infof("***************** *******************")
-	logrus.Infof(c.Describe())
-	logrus.Infof("***************** *******************")
-	logrus.Infof(d.Describe())
-	logrus.Infof("***************** *******************")
-	logrus.Infof("***************** *******************")
+	for _, lastIndex := range lastElements {
+		if vulns[lastIndex] > 0 {
+			logrus.Infof("The last entry should be 0 vuln !.. but found a vuln %v @ event %v", vulns[lastIndex], lastIndex)
+			t.Fail()
+		}
+	}
 }
 
 // TODO FINISH PRINTING 2D HEATMAP MATRIX OF
@@ -121,41 +65,11 @@ func TestSimTest(t *testing.T) {
 				NumUsers:         100,
 				RegistrySize:     regSize,
 				ScansPerMinute:   float32(ScansPerMinute),
-				SimTime:          time.Duration(5) * time.Hour,
+				SimTime:          time.Duration(1) * time.Hour,
 			}
 			c.Simulate()
 			registries = append(registries, fmt.Sprintf("%v", c.VulnerabilityTime()))
 		}
 		data = append(data, registries)
 	}
-	/**
-	table := tablewriter.NewWriter(os.Stdout)
-	for _, v := range data {
-		table.Append(v)
-	}
-	table.Render()
-	**/
-}
-
-func Assert(churnProb float32, numUsers int, regSize int, scanSpeedPerSim int, MaxPodsPerApp int) *ClusterSim {
-	c := &ClusterSim{
-		ChurnProbability: churnProb,
-		EventsPerMinute:  10,
-		MaxPodsPerApp:    MaxPodsPerApp,
-		NumUsers:         numUsers,
-		RegistrySize:     regSize,
-		ScansPerMinute:   float32(1),
-		SimTime:          time.Duration(5) * time.Hour,
-	}
-
-	ta := 5 * 60 * 10
-
-	// this verifies that total actions returns the corrent # of actions , even before the sim occured. i.e. that its stateless.
-	if c.TotalActions() < ta-10 {
-		logrus.Warnf("total actions is way too low: %v , expected %v ", c.TotalActions(), ta)
-		panic("exiting because total actions was way off, see logs above...")
-	}
-	c.Simulate()
-
-	return c
 }
