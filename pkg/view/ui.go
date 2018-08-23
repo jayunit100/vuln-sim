@@ -23,7 +23,7 @@ func LaunchUI(sims map[string]*model3.ClusterSim) {
 			bc := termui.NewBarChart()
 			data := []int{}
 			bclabels := []string{}
-			sortedEvents, vulns := util.MapNums(sim.Vulns, 40)
+			sortedEvents, vulns := util.MapNums(sim.Vulns(), 40)
 			// i is the index of the event in the timeseries of the granular events.
 			// vulnValueMapped is the *VALUE*.  Only certain 'i' values are retained.
 			for _, eventID := range sortedEvents {

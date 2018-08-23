@@ -1,11 +1,25 @@
 package model3
 
+import "fmt"
+
 // Scan Tool
 
 type ScanTool struct {
+	scans      int
 	Queue      map[string]*Image
 	Scanned    map[string]*Image
 	Importance map[string]int
+
+	// map of SHA to scan time, for historical lookup.
+	History map[string]int
+}
+
+func (s *ScanTool) Debug() string {
+	x := fmt.Sprintf("%v --- ", len(s.History))
+	for scan, h := range s.History {
+		x += fmt.Sprintf("(image:%v time:%v)", scan, h)
+	}
+	return x
 }
 
 func (s *ScanTool) init() {
@@ -13,6 +27,7 @@ func (s *ScanTool) init() {
 		s.Queue = make(map[string]*Image, 10000)
 		s.Scanned = make(map[string]*Image, 10000)
 		s.Importance = make(map[string]int, 10000)
+		s.History = make(map[string]int, 1000)
 	}
 }
 
@@ -32,16 +47,15 @@ func (s *ScanTool) Enqueue(i *Image) {
 // ScanNewImage takes an image from the queue and 'scans' it, i.e.,
 // adds its contents to the scanned queue.  Theres no 'work' done here,
 // b/c each image has a fundamental 'truth' associated with it.
-func (s *ScanTool) ScanNewImage() {
+func (s *ScanTool) ScanNewImage(time int) string {
 	s.init()
-
+	s.scans++
 	for k, v := range s.Queue {
-		_, scanned := s.Scanned[k]
-		if !scanned {
-			delete(s.Queue, k)
-			s.Scanned[k] = v
-			//logrus.Infof("Scanned: H %v M %v L %v", v.HasHighVulns, v.HasMedVulns, v.HasLowVulns)
-			return
-		}
+		delete(s.Queue, k)
+		s.History[k] = time // use this to determine when the scan happened.
+		s.Scanned[k] = v
+		//logrus.Infof("Scanned: H %v M %v L %v", v.HasHighVulns, v.HasMedVulns, v.HasLowVulns)
+		return k
 	}
+	return ""
 }

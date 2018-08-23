@@ -5,6 +5,7 @@ import (
 	"math/rand"
 
 	randomdata "github.com/Pallinder/go-randomdata"
+	"github.com/sirupsen/logrus"
 )
 
 type Registry struct {
@@ -12,9 +13,24 @@ type Registry struct {
 	ImagesByIndex []*Image
 }
 
-func (c *Registry) RandImageFrom() *Image {
-	index := rand.Intn(len(c.Images))
-	return c.ImagesByIndex[index]
+func (r *Registry) RandImageFrom() *Image {
+	if len(r.Images) != len(r.ImagesByIndex) {
+		panic(fmt.Sprintf("Something is wrong with the index of images!!! %v %v", len(r.Images), len(r.ImagesByIndex)))
+	}
+	index := rand.Intn(len(r.Images))
+	return r.ImagesByIndex[index]
+}
+
+// internal function only call me once, when initing.
+func (r *Registry) createIndex() {
+	r.ImagesByIndex = []*Image{}
+	// build random image index...
+	i := 0
+	for _, img := range r.Images {
+		r.ImagesByIndex = append(r.ImagesByIndex, img)
+		i++
+	}
+
 }
 
 func NewRegistry(maxBaseNames int, maxImages int) *Registry {
@@ -40,17 +56,16 @@ func NewRegistry(maxBaseNames int, maxImages int) *Registry {
 				fmt.Printf(fmt.Sprintf("making new image %v / %v \n", len(r.Images), maxImages))
 				r.Images[i.SHA] = i
 			} else {
-				return r
+				// omg ya i did it. i used a goto for no reason.
+				goto returnnow
 			}
 		}
 	}
-	r.ImagesByIndex = []*Image{}
-	// build random image index...
-	i := 0
-	for _, img := range r.Images {
-		r.ImagesByIndex = append(r.ImagesByIndex, img)
-		i++
-	}
 
+returnnow:
+	r.createIndex()
+	for _, i := range r.Images {
+		logrus.Infof("New reg: image %v", i)
+	}
 	return r
 }

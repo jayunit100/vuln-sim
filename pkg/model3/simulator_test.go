@@ -8,15 +8,29 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+func TestLong(t *testing.T) {
+	c := &ClusterSim{
+		ChurnProbability: .9, // high churn, faster exposure of vulns
+		EventsPerMinute:  10,
+		MaxPodsPerApp:    10,
+		NumUsers:         2,
+		RegistrySize:     60, // small registry, faster convergence to 0 unknown vulns
+		ScansPerMinute:   float32(1),
+		SimTime:          time.Duration(24*365) * time.Hour,
+	}
+
+	c.Simulate()
+}
+
 func TestSimpleConvergence(t *testing.T) {
 	c := &ClusterSim{
 		ChurnProbability: .9, // high churn, faster exposure of vulns
 		EventsPerMinute:  10,
 		MaxPodsPerApp:    10,
-		NumUsers:         10,
-		RegistrySize:     10, // small registry, faster convergence to 0 unknown vulns
-		ScansPerMinute:   float32(1000),
-		SimTime:          time.Duration(10) * time.Minute,
+		NumUsers:         2,
+		RegistrySize:     60, // small registry, faster convergence to 0 unknown vulns
+		ScansPerMinute:   float32(1),
+		SimTime:          time.Duration(60) * time.Minute,
 	}
 
 	c.Simulate()
@@ -24,11 +38,19 @@ func TestSimpleConvergence(t *testing.T) {
 	if len(vulns) == 0 {
 		t.Fail()
 	}
-	logrus.Infof("%v", len(vulns))
+	logrus.Infof("total # of events : %v", len(vulns))
 
-	for i := 0; i < len(vulns); i++ {
-		logrus.Infof("%v %v", i, vulns[i])
+	if len(c.VulnsAsMap) == 0 {
+		panic("no els")
 	}
+	for k, _ := range c.VulnsAsMap {
+		logrus.Infof("event key: %v", k)
+	}
+	for i := 0; i < len(vulns); i++ {
+		logrus.Infof("vuln count @ %v (%v)", i, vulns[i])
+	}
+
+	logrus.Info(c.st.Debug())
 
 	// By the end of the sim, we should easily be @ 0 vulnerabilities.
 	lastElements := []int{
@@ -47,6 +69,7 @@ func TestSimpleConvergence(t *testing.T) {
 			t.Fail()
 		}
 	}
+	panic("---------------")
 }
 
 // TODO FINISH PRINTING 2D HEATMAP MATRIX OF
@@ -65,7 +88,7 @@ func TestSimTest(t *testing.T) {
 				NumUsers:         100,
 				RegistrySize:     regSize,
 				ScansPerMinute:   float32(ScansPerMinute),
-				SimTime:          time.Duration(1) * time.Hour,
+				SimTime:          time.Duration(2) * time.Minute,
 			}
 			c.Simulate()
 			registries = append(registries, fmt.Sprintf("%v", c.VulnerabilityTime()))
