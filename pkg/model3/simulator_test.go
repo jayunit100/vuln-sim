@@ -27,10 +27,10 @@ func TestSimpleConvergence(t *testing.T) {
 		ChurnProbability: .9, // high churn, faster exposure of vulns
 		EventsPerMinute:  10,
 		MaxPodsPerApp:    10,
-		NumUsers:         2,
+		NumUsers:         20,
 		RegistrySize:     60, // small registry, faster convergence to 0 unknown vulns
 		ScansPerMinute:   float32(1),
-		SimTime:          time.Duration(60) * time.Minute,
+		SimTime:          time.Duration(10) * time.Minute,
 	}
 
 	c.Simulate()
@@ -63,13 +63,28 @@ func TestSimpleConvergence(t *testing.T) {
 		len(vulns) - 7,
 	}
 
+	nonZero := false
+	for eventID, vulns := range c.Vulns() {
+		if nonZero {
+			continue
+		}
+		if vulns > 0 {
+			nonZero = true
+			logrus.Infof("whew ! Found at least one real data point :) %v / %v ", eventID, vulns)
+		}
+	}
+	if !nonZero {
+		logrus.Infof("Failing: no NonZero vulns found, check that image map is populated! %v", c.VulnsAsMap)
+		t.Fail()
+	}
+
 	for _, lastIndex := range lastElements {
 		if vulns[lastIndex] > 0 {
 			logrus.Infof("The last entry should be 0 vuln !.. but found a vuln %v @ event %v", vulns[lastIndex], lastIndex)
 			t.Fail()
 		}
 	}
-	panic("---------------")
+	panic("ASDF")
 }
 
 // TODO FINISH PRINTING 2D HEATMAP MATRIX OF

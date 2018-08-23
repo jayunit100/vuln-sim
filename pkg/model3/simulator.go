@@ -88,6 +88,7 @@ func (c *ClusterSim) Vulns() []int {
 			logrus.Infof("Adding all vulns for ns: %v (total=%v) to event %v. # of containers in map := %v", namespaceKey, val, eventID, len(namespaceMap))
 		}
 		logrus.Infof("result: %v", val)
+		logrus.Infof("Attempting to write :%v to %v", eventID, len(vulns))
 		vulns[eventID] = val // <- the bug is here.
 	}
 	if len(vulns) != len(c.VulnsAsMap) {
@@ -306,6 +307,7 @@ func (c *ClusterSim) initEvents() []func() string {
 
 func (c *ClusterSim) RegisterDelete(app string) {
 	delete(c.CurrentVulns, app)
+	delete(c.VulnsAsMap[c.eventsProcessed], app)
 }
 
 // Register adding unknown vulnerabilities to the cluster.
@@ -317,11 +319,17 @@ func (c *ClusterSim) RegisterAdd(app string, img *Image) {
 	}
 	// Add images to the scan queue as soon as we see them !
 	for sha, img := range c.Namespaces[app] {
-
 		if _, ok := c.st.Queue[sha]; !ok {
 			c.st.Enqueue(img)
 		}
 	}
+
+	// c.VulnsAsMap[c.eventsProcessed] MUST exist before calling this.
+	if c.VulnsAsMap[c.eventsProcessed][app] == nil {
+		c.VulnsAsMap[c.eventsProcessed][app] = map[string]*Image{}
+	}
+
+	c.VulnsAsMap[c.eventsProcessed][app][img.SHA] = img
 
 }
 
@@ -373,14 +381,9 @@ func (c *ClusterSim) RunAllEvents() {
 
 		}
 		runScans()
-		e()
 		c.VulnsAsMap[c.eventsProcessed] = NsVulnMap{}
-		for ns, images := range c.CurrentVulns {
-			c.VulnsAsMap[c.eventsProcessed][ns] = map[string]*Image{}
-			for _, img := range images {
-				c.VulnsAsMap[c.eventsProcessed][ns][img.SHA] = img
-			}
-		}
+		e()
+
 		if rand.Intn(10000) == 1 {
 			for ns, images := range c.CurrentVulns {
 				for _, img := range images {
@@ -389,7 +392,7 @@ func (c *ClusterSim) RunAllEvents() {
 			}
 		}
 
-		util.RandLog(1, fmt.Sprintf("%.4f : work done / work remaining.", float32(c.eventsProcessed)/float32(len(c.events)))
+		util.RandLog(1, fmt.Sprintf("%.4f : work done / work remaining.", float32(c.eventsProcessed)/float32(len(c.events))))
 		c.eventsProcessed++
 	}
 	logrus.Infof("Done w/ simulation: Total scans was %v.", c.scans)
