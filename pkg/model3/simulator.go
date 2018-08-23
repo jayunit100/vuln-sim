@@ -376,18 +376,20 @@ func (c *ClusterSim) RunAllEvents() {
 		e()
 		c.VulnsAsMap[c.eventsProcessed] = NsVulnMap{}
 		for ns, images := range c.CurrentVulns {
+			c.VulnsAsMap[c.eventsProcessed][ns] = map[string]*Image{}
 			for _, img := range images {
-				c.VulnsAsMap[c.eventsProcessed][ns] = map[string]*Image{}
 				c.VulnsAsMap[c.eventsProcessed][ns][img.SHA] = img
 			}
 		}
-		for ns, images := range c.CurrentVulns {
-			for _, img := range images {
-				if img.HasHighVulns {
+		if rand.Intn(10000) == 1 {
+			for ns, images := range c.CurrentVulns {
+				for _, img := range images {
 					util.RandLog(1, fmt.Sprintf("%v in namespace %v has vulns", img.SHA, ns))
 				}
 			}
 		}
+
+		util.RandLog(1, fmt.Sprintf("%.4f : work done / work remaining.", float32(c.eventsProcessed)/float32(len(c.events)))
 		c.eventsProcessed++
 	}
 	logrus.Infof("Done w/ simulation: Total scans was %v.", c.scans)
