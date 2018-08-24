@@ -40,10 +40,10 @@ func TestSimpleConvergence(t *testing.T) {
 	}
 	logrus.Infof("total # of events : %v", len(vulns))
 
-	if len(c.VulnsAsMap) == 0 {
+	if len(c.IntroducedVulnsAsMapOfNSAtTimeToImages) == 0 {
 		panic("no els")
 	}
-	for k, _ := range c.VulnsAsMap {
+	for k, _ := range c.IntroducedVulnsAsMapOfNSAtTimeToImages {
 		logrus.Infof("event key: %v", k)
 	}
 	for i := 0; i < len(vulns); i++ {
@@ -74,7 +74,7 @@ func TestSimpleConvergence(t *testing.T) {
 		}
 	}
 	if !nonZero {
-		logrus.Infof("Failing: no NonZero vulns found, check that image map is populated! %v", c.VulnsAsMap)
+		logrus.Infof("Failing: no NonZero vulns found, check that image map is populated! %v", c.IntroducedVulnsAsMapOfNSAtTimeToImages)
 		t.Fail()
 	}
 

@@ -18,19 +18,19 @@ import (
 
 type NsVulnMap map[string]map[string]*Image
 type ClusterSim struct {
-	SimTime          time.Duration
-	NumUsers         int
-	MaxPodsPerApp    int
-	ChurnProbability float32
-	events           []func() string
-	eventsProcessed  int
-	EventsPerMinute  int // Determines Total Actions...
-	Namespaces       map[string]map[string]*Image
-	ScansPerMinute   float32
-	ScanFailureRate  func() float32
-	CurrentVulns     NsVulnMap
-	VulnsAsMap       map[int]NsVulnMap
-	scans            float32
+	SimTime                                time.Duration
+	NumUsers                               int
+	MaxPodsPerApp                          int
+	ChurnProbability                       float32
+	events                                 []func() string
+	eventsProcessed                        int
+	EventsPerMinute                        int // Determines Total Actions...
+	Namespaces                             map[string]map[string]*Image
+	ScansPerMinute                         float32
+	ScanFailureRate                        func() float32
+	CurrentVulns                           NsVulnMap
+	IntroducedVulnsAsMapOfNSAtTimeToImages map[int]NsVulnMap
+	scans                                  float32
 	/**
 	{
 		104810:{"myns1":{"high":2,"med":3,"low":10},
@@ -41,6 +41,7 @@ type ClusterSim struct {
 	st                    *ScanTool
 	ActionLog             []map[string]int // [ {"adds",1}.{"deletes",3}], ...}
 	SimulationRunComplete bool
+	History               *History
 }
 
 // TotalActions returns the amount of total actions which will ever occur.
@@ -55,7 +56,7 @@ func (c *ClusterSim) TotalScanActions() float32 {
 }
 
 // TODO finish cleaning this function up !!!!!!!!!!
-func (c *ClusterSim) CalcVulnsAt(vulnMap map[string]*Image, time int) int {
+func (c *ClusterSim) CalcVulnsAt(vulnMap []*Image, time int) int {
 	val := 0
 	for _, img := range vulnMap {
 		scanned := true
@@ -76,26 +77,7 @@ func (c *ClusterSim) CalcVulnsAt(vulnMap map[string]*Image, time int) int {
 }
 
 func (c *ClusterSim) Vulns() []int {
-	if len(c.VulnsAsMap) == 0 {
-		panic("no data in the vulns as map structure!")
-	}
-	vulns := make([]int, len(c.VulnsAsMap))
-	for eventID, namespaceMap := range c.VulnsAsMap {
-		val := 0
-		for namespaceKey, allVulnsInNS := range namespaceMap {
-			nsVulns := c.CalcVulnsAt(allVulnsInNS, eventID)
-			val += nsVulns
-			logrus.Infof("Adding all vulns for ns: %v (total=%v) to event %v. # of containers in map := %v", namespaceKey, val, eventID, len(namespaceMap))
-		}
-		logrus.Infof("result: %v", val)
-		logrus.Infof("Attempting to write :%v to %v", eventID, len(vulns))
-		vulns[eventID] = val // <- the bug is here.
-	}
-	if len(vulns) != len(c.VulnsAsMap) {
-		panic("lengths no equal")
-	}
-
-	return vulns
+	panic("reimplement me")
 }
 
 func (c *ClusterSim) Describe() string {
@@ -190,7 +172,7 @@ func randApp(pods int, r *Registry) (string, map[string]*Image) {
 }
 
 func (c *ClusterSim) Initialize() {
-	c.VulnsAsMap = make(map[int]NsVulnMap)
+	c.IntroducedVulnsAsMapOfNSAtTimeToImages = make(map[int]NsVulnMap)
 	c.CurrentVulns = make(NsVulnMap)
 	m := map[string]map[string]*Image{}
 
@@ -220,6 +202,7 @@ func (c *ClusterSim) Initialize() {
 		c.Registry = NewRegistry(c.RegistrySize, c.RegistrySize)
 	}
 
+	c.History = &History{}
 	// now, populate...
 	for {
 		app, pods := randApp(c.MaxPodsPerApp, c.Registry) // map[int32]*Img
@@ -228,6 +211,7 @@ func (c *ClusterSim) Initialize() {
 			break
 		}
 	}
+
 	c.events = c.initEvents()
 }
 
@@ -269,10 +253,12 @@ func (c *ClusterSim) initEvents() []func() string {
 				// SIMULATE: DELETING AN EXISTING NAMESPACE
 				func() string {
 					delete(c.Namespaces, app)
+					imageList := []*Image{}
 					for _, img := range c.Namespaces[app] {
 						c.st.DeprioritizeBy1(img)
+						imageList = append(imageList, img)
 					}
-					c.RegisterDelete(app)
+					c.History.ApplyDestroy(app, imageList)
 					return "delete"
 				})
 		}
@@ -283,13 +269,11 @@ func (c *ClusterSim) initEvents() []func() string {
 				// SIMULATE: CREATE A NEW NAMESPACE
 				func() string {
 					c.Namespaces[app] = pods
-					for _, img := range pods {
-						// IMPORTANT if statement ! We only flag Vunlerabilities if the image is
-						// NOT scanned yet.  Obviously.
-						if _, ok := c.st.Scanned[img.SHA]; !ok {
-							c.RegisterAdd(app, img)
-						}
+					podsList := []*Image{}
+					for _, p := range pods {
+						podsList = append(podsList, p)
 					}
+					c.History.ApplyCreate(app, podsList)
 					return "add"
 				})
 		}
@@ -307,29 +291,29 @@ func (c *ClusterSim) initEvents() []func() string {
 
 func (c *ClusterSim) RegisterDelete(app string) {
 	delete(c.CurrentVulns, app)
-	delete(c.VulnsAsMap[c.eventsProcessed], app)
+	delete(c.IntroducedVulnsAsMapOfNSAtTimeToImages[c.eventsProcessed], app)
 }
 
 // Register adding unknown vulnerabilities to the cluster.
 func (c *ClusterSim) RegisterAdd(app string, img *Image) {
 	if c.CurrentVulns[app] == nil {
 		c.CurrentVulns[app] = map[string]*Image{}
-	} else {
-		c.CurrentVulns[app][img.SHA] = img
 	}
-	// Add images to the scan queue as soon as we see them !
+	c.CurrentVulns[app][img.SHA] = img
+
+	// c.VulnsAsMap[c.eventsProcessed] MUST exist before calling this.
+	if c.IntroducedVulnsAsMapOfNSAtTimeToImages[c.eventsProcessed][app] == nil {
+		c.IntroducedVulnsAsMapOfNSAtTimeToImages[c.eventsProcessed][app] = map[string]*Image{}
+	}
+	c.IntroducedVulnsAsMapOfNSAtTimeToImages[c.eventsProcessed][app][img.SHA] = img
+
+	// queue the scans.. simulating perceiver->perceptor notification.
+	// TODO consider adding some latency here, to simulate SLA better, i.e.
 	for sha, img := range c.Namespaces[app] {
 		if _, ok := c.st.Queue[sha]; !ok {
 			c.st.Enqueue(img)
 		}
 	}
-
-	// c.VulnsAsMap[c.eventsProcessed] MUST exist before calling this.
-	if c.VulnsAsMap[c.eventsProcessed][app] == nil {
-		c.VulnsAsMap[c.eventsProcessed][app] = map[string]*Image{}
-	}
-
-	c.VulnsAsMap[c.eventsProcessed][app][img.SHA] = img
 
 }
 
@@ -381,9 +365,8 @@ func (c *ClusterSim) RunAllEvents() {
 
 		}
 		runScans()
-		c.VulnsAsMap[c.eventsProcessed] = NsVulnMap{}
+		c.IntroducedVulnsAsMapOfNSAtTimeToImages[c.eventsProcessed] = NsVulnMap{}
 		e()
-
 		if rand.Intn(10000) == 1 {
 			for ns, images := range c.CurrentVulns {
 				for _, img := range images {
