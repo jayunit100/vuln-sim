@@ -18,19 +18,16 @@ import (
 
 type NsVulnMap map[string]map[string]*Image
 type ClusterSim struct {
-	SimTime                                time.Duration
-	NumUsers                               int
-	MaxPodsPerApp                          int
-	ChurnProbability                       float32
-	events                                 []func() string
-	eventsProcessed                        int
-	EventsPerMinute                        int // Determines Total Actions...
-	Namespaces                             map[string]map[string]*Image
-	ScansPerMinute                         float32
-	ScanFailureRate                        func() float32
-	CurrentVulns                           NsVulnMap
-	IntroducedVulnsAsMapOfNSAtTimeToImages map[int]NsVulnMap
-	scans                                  float32
+	SimTime          time.Duration
+	NumUsers         int
+	MaxPodsPerApp    int
+	ChurnProbability float32
+	events           []func() string
+	eventsProcessed  int
+	EventsPerMinute  int // Determines Total Actions...
+	ScansPerMinute   float32
+	ScanFailureRate  func() float32
+	scans            float32
 	/**
 	{
 		104810:{"myns1":{"high":2,"med":3,"low":10},
@@ -44,6 +41,11 @@ type ClusterSim struct {
 	History               *History
 }
 
+// Legacy func
+func (c *ClusterSim) Namespaces() map[string]map[string]*Image {
+	return c.History.State[c.eventsProcessed]
+}
+
 // TotalActions returns the amount of total actions which will ever occur.
 func (c *ClusterSim) TotalActions() int {
 	//logrus.Infof("total actions: %v / %v", c.EventsPerMinute, c.SimTime.Minutes())
@@ -55,50 +57,31 @@ func (c *ClusterSim) TotalScanActions() float32 {
 	return float32(float64(c.ScansPerMinute) * c.SimTime.Minutes())
 }
 
-// TODO finish cleaning this function up !!!!!!!!!!
-func (c *ClusterSim) CalcVulnsAt(vulnMap []*Image, time int) int {
-	val := 0
-	for _, img := range vulnMap {
-		scanned := true
-		// something was scanned iff , it was scanned + it was scanned before time X.
-		if lookupTime, ok := c.st.History[img.SHA]; ok {
-			if lookupTime > time {
-				scanned = false
+func (c *ClusterSim) Vulns() []int {
+	v := make([]int, c.eventsProcessed)
+	for i := 0; i < c.eventsProcessed; i++ {
+		// logrus.Infof("final vulns calc %v   /  %v", i, c.History.currentIndex())
+		// for each image at this time point
+		for sha, count := range c.History.ImagesAt(i) {
+			// if it was scanned before this event, it doesnt count as a vuln.
+			if time, ok := c.st.History[sha]; ok && time < i {
+				// image was scanned, before,  time i
+			} else if image := c.Registry.Images[sha]; image.HasAnyVulns() {
+				v[i] += count
 			}
 		}
-
-		if !scanned && (img.HasHighVulns || img.HasMedVulns || img.HasLowVulns) {
-			val++
-		} else {
-			logrus.Infof("Was scanned already %v (total scans : %v/%v queue ", img.SHA, len(c.st.Scanned), len(c.st.Queue))
-		}
 	}
-	return val
-}
-
-func (c *ClusterSim) Vulns() []int {
-	panic("reimplement me")
+	return v
 }
 
 func (c *ClusterSim) Describe() string {
 	if !c.SimulationRunComplete {
 		panic("Cant describe before simulation ran !")
 	}
-	sA := fmt.Sprintf("%v", len(c.Namespaces))
 
 	uniqImages := map[string]bool{}
 
 	uniqImagesWVulns := map[string]bool{}
-	//total vulnerabilities.
-	for _, images := range c.Namespaces {
-		for _, img := range images {
-			if img.HasHighVulns || img.HasLowVulns || img.HasMedVulns {
-				uniqImagesWVulns[img.SHA] = true
-			} else {
-				uniqImages[img.SHA] = true
-			}
-		}
-	}
 
 	// longest safe run...
 	longest := 0.0
@@ -114,11 +97,10 @@ func (c *ClusterSim) Describe() string {
 		}
 	}()
 
-	description := fmt.Sprintf("FINAL STATE: scanrate %v, \nScans done %v , \nReg size... %v \nApps... %v\nFinal vuln images that are running..... %v \nUnique images with vulnerabilities............ %v\nTime.......%.5f days \n*** Vuln time **** ....... %.2f days.\nLongest run of events when safe: %v (out of %v)",
+	description := fmt.Sprintf("FINAL STATE: scanrate %v, \nScans done %v , \nReg size... %v \nFinal vuln images that are running..... %v \nUnique images with vulnerabilities............ %v\nTime.......%.5f days \n*** Vuln time **** ....... %.2f days.\nLongest run of events when safe: %v (out of %v)",
 		c.TotalScanActions(),
 		len(c.st.Scanned),
 		c.RegistrySize,
-		sA,              // apps
 		len(uniqImages), // images
 		len(uniqImagesWVulns),
 		c.TimeSoFar().Hours()/24, // days
@@ -172,9 +154,6 @@ func randApp(pods int, r *Registry) (string, map[string]*Image) {
 }
 
 func (c *ClusterSim) Initialize() {
-	c.IntroducedVulnsAsMapOfNSAtTimeToImages = make(map[int]NsVulnMap)
-	c.CurrentVulns = make(NsVulnMap)
-	m := map[string]map[string]*Image{}
 
 	// This is a knob that simulates a 'scan' tool which degrades performance over time.
 	if c.ScanFailureRate == nil {
@@ -184,7 +163,6 @@ func (c *ClusterSim) Initialize() {
 		}
 	}
 
-	c.Namespaces = m
 	if c.SimTime == 0*time.Second {
 		panic("Need a sim time of non zero: How long do you want to simulate events for???")
 	}
@@ -203,16 +181,14 @@ func (c *ClusterSim) Initialize() {
 	}
 
 	c.History = &History{}
-	// now, populate...
-	for {
-		app, pods := randApp(c.MaxPodsPerApp, c.Registry) // map[int32]*Img
-		c.Namespaces[app] = pods
-		if len(c.Namespaces) == c.NumUsers {
-			break
-		}
-	}
+	c.History.init()
 
+	for len(c.History.State[0]) < c.NumUsers {
+		ns, pods := randApp(0, c.Registry)
+		c.History.State[0][ns] = pods
+	}
 	c.events = c.initEvents()
+
 }
 
 func (c *ClusterSim) initEvents() []func() string {
@@ -230,7 +206,8 @@ func (c *ClusterSim) initEvents() []func() string {
 			//		2 - the creation of a new namespace
 			// over time, the probability of adding/deleting is thus equal, resulting
 			// in dynamic equilibrium
-			for app, _ := range c.Namespaces {
+			// logrus.Infof("%v [[ %v ]] ", c.History.State, c.eventsProcessed)
+			for app, _ := range c.History.currentState() {
 				// churn event !
 				if c.ChurnProbability > rand.Float32() {
 					// 50% probability that we either add or delete something.
@@ -252,9 +229,10 @@ func (c *ClusterSim) initEvents() []func() string {
 				// ****************************
 				// SIMULATE: DELETING AN EXISTING NAMESPACE
 				func() string {
-					delete(c.Namespaces, app)
 					imageList := []*Image{}
-					for _, img := range c.Namespaces[app] {
+					// logrus.Infof("%v %v", c.eventsProcessed, len(c.History.State))
+					// logrus.Infof("map:%v key: %v", c.History.currentState(), app)
+					for _, img := range c.History.currentState()[app] {
 						c.st.DeprioritizeBy1(img)
 						imageList = append(imageList, img)
 					}
@@ -268,10 +246,11 @@ func (c *ClusterSim) initEvents() []func() string {
 				// *****************************
 				// SIMULATE: CREATE A NEW NAMESPACE
 				func() string {
-					c.Namespaces[app] = pods
+					c.History.currentState()[app] = pods
 					podsList := []*Image{}
 					for _, p := range pods {
 						podsList = append(podsList, p)
+						c.st.EnqueueIfUnscanned(p)
 					}
 					c.History.ApplyCreate(app, podsList)
 					return "add"
@@ -289,58 +268,19 @@ func (c *ClusterSim) initEvents() []func() string {
 	return c.events
 }
 
-func (c *ClusterSim) RegisterDelete(app string) {
-	delete(c.CurrentVulns, app)
-	delete(c.IntroducedVulnsAsMapOfNSAtTimeToImages[c.eventsProcessed], app)
-}
-
-// Register adding unknown vulnerabilities to the cluster.
-func (c *ClusterSim) RegisterAdd(app string, img *Image) {
-	if c.CurrentVulns[app] == nil {
-		c.CurrentVulns[app] = map[string]*Image{}
-	}
-	c.CurrentVulns[app][img.SHA] = img
-
-	// c.VulnsAsMap[c.eventsProcessed] MUST exist before calling this.
-	if c.IntroducedVulnsAsMapOfNSAtTimeToImages[c.eventsProcessed][app] == nil {
-		c.IntroducedVulnsAsMapOfNSAtTimeToImages[c.eventsProcessed][app] = map[string]*Image{}
-	}
-	c.IntroducedVulnsAsMapOfNSAtTimeToImages[c.eventsProcessed][app][img.SHA] = img
-
-	// queue the scans.. simulating perceiver->perceptor notification.
-	// TODO consider adding some latency here, to simulate SLA better, i.e.
-	for sha, img := range c.Namespaces[app] {
-		if _, ok := c.st.Queue[sha]; !ok {
-			c.st.Enqueue(img)
-		}
-	}
-
-}
-
-// Increment Increments the state of the cluster by one time period.  i.e. one day.
-func (c *ClusterSim) ExportSimulationCheckpointStatistics() {
-	// initially the length of 'state' is # the initial users.
-	deletes := []string{}
-	adds := map[string]map[string]*Image{}
-
-	// now, do all the map mutation actions....
-	for _, app := range deletes {
-		delete(c.Namespaces, app)
-	}
-	for app, pods := range adds {
-		c.Namespaces[app] = pods
-	}
-}
 func (c *ClusterSim) AvgScansPerEvent() float32 {
 	scanProbability := float32(c.TotalScanActions()) / float32(c.TotalActions())
 	return scanProbability
 }
 
+var tries int // := 0
+var zeros int // := 0
+
 func (c *ClusterSim) RunAllEvents() {
+	totalEvents := len(c.events)
 	for len(c.events) > 0 {
 		e, _c := util.RandRemove(c.events)
 		c.events = _c
-
 		runScans := func() {
 			// make incremental progress, i.e. 1/2 a scan, 1/3 a scan, ... every time point.
 			c.scans += util.RandFloatFromDistribution(float32(c.AvgScansPerEvent()), float32(c.AvgScansPerEvent()))
@@ -351,36 +291,46 @@ func (c *ClusterSim) RunAllEvents() {
 				// at a scan a minute, it increases typically .1 or so per event , assuming 10 events / minute.
 				// when that happens, we make sure to 'scan a new image'.
 				//logrus.Infof("scan queue  > 0 : %v, # scans > total scanned :  %v", len(c.st.Queue) > 0, int(c.scans) > len(c.st.Scanned))
+				tries++
+				if len(c.st.Queue) == 0 {
+					zeros++
+					// logrus.Infof("Scan queue at zero, %v  / %v times.", zeros, tries)
+				}
+
 				for len(c.st.Queue) > 0 && int(c.scans) > len(c.st.Scanned) {
 					scannedImage := c.st.ScanNewImage(c.eventsProcessed)
 					if scannedImage == "" {
 						panic("scanned nothing!")
 					} else {
-						logrus.Infof("scanned image: [%v]", scannedImage)
+						// logrus.Infof("%v : scanned image: [%v] total: [%v] : HISTORY TIME : %v", c.eventsProcessed, scannedImage, len(c.st.History), c.st.History[scannedImage])
 					}
 				}
 			} else {
-				logrus.Infof("SKIPPING SCAN! %v", c.ScanFailureRate())
+				// logrus.Infof("SKIPPING SCAN! %v", c.ScanFailureRate())
 			}
 
 		}
 		runScans()
-		c.IntroducedVulnsAsMapOfNSAtTimeToImages[c.eventsProcessed] = NsVulnMap{}
 		e()
+		c.History.Next()
 		if rand.Intn(10000) == 1 {
-			for ns, images := range c.CurrentVulns {
+			for ns, images := range c.History.currentState() {
 				for _, img := range images {
 					util.RandLog(1, fmt.Sprintf("%v in namespace %v has vulns", img.SHA, ns))
 				}
 			}
 		}
 
-		util.RandLog(1, fmt.Sprintf("%.4f : work done / work remaining.", float32(c.eventsProcessed)/float32(len(c.events))))
+		util.RandLog(1, fmt.Sprintf("%.4f : work done / work remaining.", float32(c.eventsProcessed)/float32(totalEvents)))
 		c.eventsProcessed++
 	}
-	logrus.Infof("Done w/ simulation: Total scans was %v.", c.scans)
+	logrus.Infof("Done w/ simulation: Total scans to be done,  calculated was %v (executed %v)", c.scans, c.st.scans)
 	if c.st.scans == 0 {
 		panic("This simulation was useless: no scans !")
+	}
+	if c.History.currentIndex() < c.eventsProcessed {
+		logrus.Infof("cur index %v cur index but!!! proceesed %v", c.History.currentIndex(), c.eventsProcessed)
+		panic("!!!!!")
 	}
 }
 

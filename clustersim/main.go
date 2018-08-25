@@ -93,9 +93,9 @@ func ExperimentalSimulation1() {
 		EventsPerMinute:  10,
 		MaxPodsPerApp:    10,
 		NumUsers:         100,
-		RegistrySize:     10000,
-		ScansPerMinute:   float32(2), // this is really fast !
-		SimTime:          time.Duration(24*365) * time.Hour,
+		RegistrySize:     1000,
+		ScansPerMinute:   float32(5), // this is really fast !
+		SimTime:          time.Duration(38) * time.Hour,
 	}
 
 	done := make(chan bool)
@@ -116,6 +116,12 @@ func ExperimentalSimulation1() {
 	<-done
 	<-done
 
+	vulns := c.Vulns()
+	for i := 0; i < len(vulns); i++ {
+		logrus.Infof("%v/%v", i, vulns)
+	}
+
+	time.Sleep(1 * time.Minute)
 	view.LaunchUI(map[string]*model3.ClusterSim{
 		"2xScanRate:": &b,
 		"2xUsers:":    &c,

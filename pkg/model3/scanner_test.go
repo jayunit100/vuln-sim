@@ -17,8 +17,8 @@ func TestScanQ(t *testing.T) {
 		Name: "jay1",
 	}
 
-	st.Enqueue(i1)
-	st.Enqueue(i2)
+	st.EnqueueIfUnscanned(i1)
+	st.EnqueueIfUnscanned(i2)
 
 	v1 := st.ScanNewImage(0)
 	v2 := st.ScanNewImage(0)

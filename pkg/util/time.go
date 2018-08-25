@@ -112,7 +112,7 @@ func RandRemove(s []func() string) (func() string, []func() string) {
 
 // randomly log something, probability = x out of 10000 times.
 func RandLog(x int, s string) {
-	if rand.Intn(100000) == x {
+	if rand.Intn(1000) == x {
 		logrus.Info(s)
 	}
 }

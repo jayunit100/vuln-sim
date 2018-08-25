@@ -18,7 +18,6 @@ func TestLong(t *testing.T) {
 		ScansPerMinute:   float32(1),
 		SimTime:          time.Duration(24*365) * time.Hour,
 	}
-
 	c.Simulate()
 }
 
@@ -27,27 +26,28 @@ func TestSimpleConvergence(t *testing.T) {
 		ChurnProbability: .9, // high churn, faster exposure of vulns
 		EventsPerMinute:  10,
 		MaxPodsPerApp:    10,
-		NumUsers:         20,
-		RegistrySize:     60, // small registry, faster convergence to 0 unknown vulns
-		ScansPerMinute:   float32(1),
+		NumUsers:         5,
+		RegistrySize:     5, // small registry, faster convergence to 0 unknown vulns
+		ScansPerMinute:   float32(2),
 		SimTime:          time.Duration(10) * time.Minute,
 	}
 
 	c.Simulate()
+	if len(c.Registry.Images) > c.RegistrySize || (len(c.st.Scanned) > c.RegistrySize) {
+		logrus.Infof("Registry or scans size too big ! (%v %v )> %v, scanned", len(c.st.Scanned), len(c.Registry.Images), c.RegistrySize)
+		panic("reg size")
+		t.Fail()
+		return
+	}
+
 	vulns := c.Vulns()
 	if len(vulns) == 0 {
 		t.Fail()
 	}
 	logrus.Infof("total # of events : %v", len(vulns))
 
-	if len(c.IntroducedVulnsAsMapOfNSAtTimeToImages) == 0 {
-		panic("no els")
-	}
-	for k, _ := range c.IntroducedVulnsAsMapOfNSAtTimeToImages {
-		logrus.Infof("event key: %v", k)
-	}
 	for i := 0; i < len(vulns); i++ {
-		logrus.Infof("vuln count @ %v (%v)", i, vulns[i])
+		logrus.Infof("vuln count @ %v (%v) debug: %v ****** %v", i, vulns[i], c.History.ImagesAt(i), c.st.History)
 	}
 
 	logrus.Info(c.st.Debug())
@@ -74,7 +74,6 @@ func TestSimpleConvergence(t *testing.T) {
 		}
 	}
 	if !nonZero {
-		logrus.Infof("Failing: no NonZero vulns found, check that image map is populated! %v", c.IntroducedVulnsAsMapOfNSAtTimeToImages)
 		t.Fail()
 	}
 
@@ -84,7 +83,6 @@ func TestSimpleConvergence(t *testing.T) {
 			t.Fail()
 		}
 	}
-	panic("ASDF")
 }
 
 // TODO FINISH PRINTING 2D HEATMAP MATRIX OF

@@ -17,6 +17,10 @@ type Image struct {
 	HasHighVulns bool
 }
 
+func (i *Image) HasAnyVulns() bool {
+	return i.HasHighVulns || i.HasMedVulns || i.HasLowVulns
+}
+
 func NewImage(baseName string, tag []string) *Image {
 	//logrus.Infof("%v %v %v", util.RandIntFromDistribution(5, 10), util.RandIntFromDistribution(5, 10), util.RandIntFromDistribution(5, 10))
 

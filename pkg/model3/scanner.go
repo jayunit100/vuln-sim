@@ -1,6 +1,10 @@
 package model3
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/sirupsen/logrus"
+)
 
 // Scan Tool
 
@@ -38,8 +42,12 @@ func (s *ScanTool) DeprioritizeBy1(i *Image) {
 }
 
 // Add an image to the scan Queue.  If it exists, only importance changes.
-func (s *ScanTool) Enqueue(i *Image) {
+func (s *ScanTool) EnqueueIfUnscanned(i *Image) {
 	s.init()
+	if _, ok := s.History[i.SHA]; ok {
+		// skip enque becuase already scanned...
+		return
+	}
 	s.Queue[i.SHA] = i
 	s.Importance[i.SHA]++
 }
@@ -49,12 +57,13 @@ func (s *ScanTool) Enqueue(i *Image) {
 // b/c each image has a fundamental 'truth' associated with it.
 func (s *ScanTool) ScanNewImage(time int) string {
 	s.init()
-	s.scans++
 	for k, v := range s.Queue {
+		s.scans++
 		delete(s.Queue, k)
 		s.History[k] = time // use this to determine when the scan happened.
 		s.Scanned[k] = v
-		//logrus.Infof("Scanned: H %v M %v L %v", v.HasHighVulns, v.HasMedVulns, v.HasLowVulns)
+		logrus.Infof("scan completed: Remaining q: %v, [ total scanned %v ] ",
+			len(s.Queue), len(s.Scanned))
 		return k
 	}
 	return ""

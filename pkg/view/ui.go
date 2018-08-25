@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/gizak/termui"
@@ -19,7 +20,9 @@ func LaunchUI(sims map[string]*model3.ClusterSim) {
 
 	for title, sim := range sims {
 		// build a new horizontally spanning chart
-		bc := func() *termui.BarChart {
+		bcc := func() *termui.BarChart {
+			termui.Render(termui.NewPar(fmt.Sprintf("asdf %v %v", "a", "b")))
+
 			bc := termui.NewBarChart()
 			data := []int{}
 			bclabels := []string{}
@@ -27,6 +30,7 @@ func LaunchUI(sims map[string]*model3.ClusterSim) {
 			// i is the index of the event in the timeseries of the granular events.
 			// vulnValueMapped is the *VALUE*.  Only certain 'i' values are retained.
 			for _, eventID := range sortedEvents {
+				termui.Render(termui.NewPar(fmt.Sprintf("asdf %v", rand.Intn(10))))
 				data = append(data, vulns[eventID])
 				bclabels = append(bclabels, fmt.Sprintf("%v[%v]", eventID, time.Duration(eventID)*sim.TimeElapsedPerEvent(eventID)))
 			}
@@ -41,7 +45,7 @@ func LaunchUI(sims map[string]*model3.ClusterSim) {
 			bc.NumColor = termui.ColorYellow
 			return bc
 		}()
-		termui.Body.AddRows(termui.NewRow(termui.NewCol(200, 0, bc)))
+		termui.Body.AddRows(termui.NewRow(termui.NewCol(200, 0, bcc)))
 	}
 
 	// calculate layout
