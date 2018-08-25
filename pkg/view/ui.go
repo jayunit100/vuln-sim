@@ -2,15 +2,28 @@ package view
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/gizak/termui"
 	"github.com/jayunit100/vuln-sim/pkg/model3"
-	"github.com/jayunit100/vuln-sim/pkg/util"
+	"github.com/sirupsen/logrus"
 )
 
 func LaunchUI(sims map[string]*model3.ClusterSim) {
+
+	vulns := map[string][]int{}
+	eventIDs := map[string][]int{}
+
+	for title, sim := range sims {
+		sims[title] = sim
+		vulns[title] = []int{}
+		eventIDs[title] = []int{}
+		for i := 0; i < sim.TotalActions(); i += sim.TotalActions() / 40 {
+			logrus.Infof("%v out of %v", i, sim.TotalActions()/40)
+			vulns[title] = append(vulns[title], sim.VulnsAt(i))
+			eventIDs[title] = append(eventIDs[title], i)
+		}
+	}
 
 	// must happen b4 you do other termui actions.
 	if err := termui.Init(); err != nil {
@@ -18,7 +31,8 @@ func LaunchUI(sims map[string]*model3.ClusterSim) {
 	}
 	defer termui.Close()
 
-	for title, sim := range sims {
+	for title, vulnsArray := range vulns {
+		sim := sims[title]
 		// build a new horizontally spanning chart
 		bcc := func() *termui.BarChart {
 			termui.Render(termui.NewPar(fmt.Sprintf("asdf %v %v", "a", "b")))
@@ -26,16 +40,15 @@ func LaunchUI(sims map[string]*model3.ClusterSim) {
 			bc := termui.NewBarChart()
 			data := []int{}
 			bclabels := []string{}
-			sortedEvents, vulns := util.MapNums(sim.Vulns(), 40)
+
 			// i is the index of the event in the timeseries of the granular events.
 			// vulnValueMapped is the *VALUE*.  Only certain 'i' values are retained.
-			for _, eventID := range sortedEvents {
-				termui.Render(termui.NewPar(fmt.Sprintf("asdf %v", rand.Intn(10))))
-				data = append(data, vulns[eventID])
+			for i, vuln := range vulnsArray {
+				eventID := eventIDs[title][i]
+				data = append(data, vuln)
 				bclabels = append(bclabels, fmt.Sprintf("%v[%v]", eventID, time.Duration(eventID)*sim.TimeElapsedPerEvent(eventID)))
 			}
 			bc.BarWidth = 15
-			bc.BorderLabel = title + fmt.Sprintf("%v", sim.Describe())
 			bc.Data = data
 			bc.Width = 100
 			bc.Height = 20

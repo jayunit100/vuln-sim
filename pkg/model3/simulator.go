@@ -57,6 +57,19 @@ func (c *ClusterSim) TotalScanActions() float32 {
 	return float32(float64(c.ScansPerMinute) * c.SimTime.Minutes())
 }
 
+// COULD TAKE A LONG TIME!
+func (c *ClusterSim) VulnsAt(i int) int {
+	v := 0
+	for sha, count := range c.History.ImagesAt(i) {
+		if time, ok := c.st.History[sha]; ok && time < i {
+		} else if image := c.Registry.Images[sha]; image.HasAnyVulns() {
+			v += count
+		}
+	}
+	return v
+}
+
+// COULD TAKE A LONG TIME!
 func (c *ClusterSim) Vulns() []int {
 	v := make([]int, c.eventsProcessed)
 	for i := 0; i < c.eventsProcessed; i++ {
@@ -257,7 +270,7 @@ func (c *ClusterSim) initEvents() []func() string {
 				})
 		}
 
-		if len(c.events)%100 == 0 {
+		if len(c.events)%10000 == 0 {
 			logrus.Infof("events created so far: %v ... (del %v, add %v)", len(c.events), d, a)
 		}
 		if len(c.events) >= c.TotalActions() {
